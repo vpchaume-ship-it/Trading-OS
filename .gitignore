@@ -10,7 +10,8 @@ venv/
 # Données de marché et contenus personnels
 data/*.csv
 data/*.parquet
-knowledge/*.pdf
+# NB : les PDF de knowledge/ SONT versionnés (dépôt privé) pour survivre aux
+# sessions — retirez-les du dépôt si vous ne le souhaitez pas.
 journal/backtests/
 journal/reports/
 journal/news/

@@ -13,6 +13,7 @@ from trading_os.journal.store import Journal
 from trading_os.news.calendar import fetch_red_folders, append_history
 from trading_os.news.scenarios import build_card, card_markdown
 from trading_os.premarket import levels as lv
+from trading_os.premarket.bias import BIAS_REMINDER, daily_bias
 
 
 def _fmt_price(x: float) -> str:
@@ -28,6 +29,11 @@ def _instrument_section(name: str, csv_path: str, cfg: dict) -> list[str]:
         df = load_csv(csv_path, cfg["data"]["csv_timezone"])
     except FileNotFoundError:
         return lines + [f"_Pas de données ({csv_path} introuvable) — lancer l'export MT5._", ""]
+
+    bias, reason = daily_bias(lv.daily_sessions(df))
+    icon = {"haussier": "🟢", "baissier": "🔴", "neutre": "⚪"}[bias]
+    lines += [f"### Daily bias (PDH/PDL) : {icon} **{bias.upper()}**",
+              f"- {reason}", f"- _{BIAS_REMINDER}_", ""]
 
     pd_lv = lv.previous_day_levels(df)
     pw_lv = lv.previous_week_levels(df)

@@ -45,7 +45,8 @@ def write_report(result: BacktestResult, journal_dir: Path) -> Path:
         f"- **Coûts** : {result.params.get('commission_rt_usd')}$ aller-retour + "
         f"{result.params.get('slippage_ticks_stop')} tick(s) de slippage sur les stops",
         f"- **Setups ignorés** : RR insuffisant : {result.skipped_low_rr}, "
-        f"no-trade-zone : {result.skipped_ntz}, position déjà ouverte : {result.skipped_position_busy}",
+        f"no-trade-zone : {result.skipped_ntz}, position déjà ouverte : {result.skipped_position_busy}, "
+        f"notation < {result.params.get('min_rating', 0)}/10 : {result.skipped_low_rating}",
         "",
         "## Résultats globaux (R net, coûts inclus)",
         "",
@@ -74,6 +75,8 @@ def write_report(result: BacktestResult, journal_dir: Path) -> Path:
             _fmt_table(breakdown(trades, "weekday"), "jour"),
             "## Répartition par direction", "",
             _fmt_table(breakdown(trades, "direction"), "direction"),
+            "## Répartition par grade d'inversion (notation PDF /10)", "",
+            _fmt_table(breakdown(trades, "grade"), "grade"),
             "## Contexte news (trade dans une no-trade-zone ?)", "",
             _fmt_table(breakdown(trades, "in_ntz"), "dans_NTZ"),
         ]

@@ -17,6 +17,7 @@ from datetime import datetime
 import pandas as pd
 
 from trading_os.core.fvg import FVG, FVGStatus, FVGTracker, InversionEvent, Direction
+from trading_os.core.rating import InversionRating, rate_inversion
 from trading_os.core.swings import find_swings, nearest_liquidity_target
 from trading_os.core.timeutils import Killzones, parse_hhmm
 
@@ -29,6 +30,7 @@ class PendingSetup:
     stop: float
     target: float
     risk_ticks: float
+    rating: InversionRating | None = None
 
 
 @dataclass
@@ -50,6 +52,7 @@ class BacktestResult:
     skipped_low_rr: int = 0
     skipped_ntz: int = 0
     skipped_position_busy: int = 0
+    skipped_low_rating: int = 0
 
 
 def _load_ntz_intervals(path: str, before_min: int, after_min: int) -> list[tuple]:
@@ -112,6 +115,7 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     )
     stop_buffer = icfg["stop_buffer_ticks"] * tick
     entry_mode = icfg["retest_entry"]
+    min_rating = icfg.get("min_rating", 0)
 
     setups: list[PendingSetup] = []
     position: Position | None = None
@@ -123,7 +127,11 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     l_arr = df["low"].to_numpy(); c_arr = df["close"].to_numpy()
     times = df.index
 
-    def make_setup(f: FVG, idx: int) -> PendingSetup | None:
+    def make_setup(f: FVG, idx: int,
+                   rating: InversionRating | None = None) -> PendingSetup | None:
+        if rating is not None and rating.total < min_rating:
+            result.skipped_low_rating += 1
+            return None
         if f.ifvg_direction == Direction.BEARISH:
             edges = {"proximal": f.bottom, "midpoint": (f.top + f.bottom) / 2, "distal": f.top}
             entry = edges[entry_mode]
@@ -148,7 +156,7 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
                     return None
             else:
                 tgt = entry + target_cfg["fixed_rr"] * risk
-        return PendingSetup(f, f.ifvg_direction, entry, stop, tgt, risk / tick)
+        return PendingSetup(f, f.ifvg_direction, entry, stop, tgt, risk / tick, rating)
 
     def close_position(pos: Position, ts, exit_price: float, reason: str):
         s = pos.setup
@@ -170,6 +178,8 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
             "fvg_direction": s.fvg.direction.value,
             "fvg_created": s.fvg.created_time,
             "inverted_time": s.fvg.inverted_time,
+            "rating": s.rating.total if s.rating else None,
+            "grade": s.rating.grade if s.rating else None,
         })
 
     for i in range(len(df)):
@@ -197,7 +207,7 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         retested_now: set[int] = set()
         for ev in events:
             if isinstance(ev, InversionEvent):
-                stp = make_setup(ev.fvg, i)
+                stp = make_setup(ev.fvg, i, rate_inversion(ev.fvg, o, h, l, c))
                 if stp is not None:
                     setups.append(stp)
             else:  # RetestEvent — the tracker may flag the zone CONSUMED on the
@@ -248,5 +258,6 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         "target": dict(target_cfg), "allowed_killzones": list(allowed_kz),
         "commission_rt_usd": commission_rt, "slippage_ticks_stop": costs["slippage_ticks_stop"],
         "respect_no_trade_zones": respect_ntz, "n_news_events": len(ntz),
+        "min_rating": min_rating,
     }
     return result

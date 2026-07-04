@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from trading_os.core.fvg import FVGTracker, InversionEvent, RetestEvent
+from trading_os.core.rating import rate_inversion
 from trading_os.core.timeutils import NY, Killzones
 from trading_os.data.loader import load_csv
 from trading_os.forward.guards import assert_daily_loss_ok
@@ -56,6 +57,7 @@ def run_semi_auto(cfg: dict, instrument: str, console: Console) -> None:
 
     last_ts = None
     seen = 0
+    ratings: dict[int, object] = {}  # id(fvg) -> InversionRating
     while True:
         # daily-loss guard, re-checked every cycle
         assert_daily_loss_ok(realized_pnl_today(cfg), fcfg["daily_loss_limit_usd"])
@@ -75,9 +77,13 @@ def run_semi_auto(cfg: dict, instrument: str, console: Console) -> None:
                 in_kz = kz.in_any(now, icfg["allowed_killzones"])
                 in_ntz = any(a <= now <= b for a, b in ntz)
                 if isinstance(ev, InversionEvent):
+                    r = rate_inversion(ev.fvg, row["open"], row["high"],
+                                       row["low"], row["close"])
+                    ratings[id(ev.fvg)] = r
                     console.print(f"[yellow]⚡ {ts:%H:%M} Inversion détectée — "
                                   f"IFVG {ev.fvg.ifvg_direction.value} "
                                   f"{ev.fvg.bottom:.2f}→{ev.fvg.top:.2f} — "
+                                  f"grade {r.grade} ({r.total}/10) — "
                                   f"attendre le retest.[/yellow]")
                 elif isinstance(ev, RetestEvent):
                     if in_ntz:
@@ -87,9 +93,13 @@ def run_semi_auto(cfg: dict, instrument: str, console: Console) -> None:
                         console.print(f"[dim]{ts:%H:%M} Retest IFVG hors killzone — ignoré.[/dim]")
                     else:
                         console.bell()
+                        r = ratings.get(id(ev.fvg))
+                        grade_line = (f"Grade inversion : {r.grade} ({r.total}/10)\n"
+                                      if r else "")
                         console.print(Panel(
                             f"SETUP IFVG {ev.fvg.ifvg_direction.value.upper()} sur {instrument}\n"
                             f"Zone : {ev.fvg.bottom:.2f} → {ev.fvg.top:.2f}\n"
+                            f"{grade_line}"
                             f"Stop au-delà de la zone + {icfg['stop_buffer_ticks']} ticks\n"
                             f"Killzone : {kz.label(now)}\n"
                             "→ Validez MANUELLEMENT sur Tradovate demo (1 micro max).",
