@@ -50,8 +50,9 @@ ifvg:
   allowed_killzones: ["ny_am"]   # conforme aux PDF : 9:30-11:30 NY uniquement
   # Notation de la bougie d'inversion (PDF Candle Closure Ratings) :
   # force /4 + vitesse /3 + qualité RR /3 = /10 (10=A+, 9=A, 8=A-, 7=B+, 6=B, 5=B-, 3-4=C, <3=F).
-  # Les setups sous ce seuil sont ignorés. 0 = pas de filtre ; le PDF ne trade que A-/B+ et mieux (≥7).
-  min_rating: 0
+  # Les setups sous ce seuil sont ignorés (backtest ET forward test).
+  # DÉCISION UTILISATEUR : A et A+ uniquement -> 9.
+  min_rating: 9
   target:
     # Conforme à vos PDF : la cible est la prochaine liquidité (swing confirmé
     # le plus proche dans le sens du trade). "fixed_rr" reste dispo pour comparer.

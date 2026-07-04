@@ -27,6 +27,7 @@ from trading_os.news.calendar import NewsEvent, append_history, fetch_red_folder
 from trading_os.news.scenarios import build_card
 from trading_os.premarket.bias import daily_bias
 from trading_os.premarket.mtf_bias import day_status, instrument_matrix
+from trading_os.webapp.insights import conclusions, run_variants
 from trading_os.webapp.stats import dashboard_backtest
 
 FR_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -302,6 +303,32 @@ def backtest_section(cfg: dict) -> str:
     return "".join(blocks) + note
 
 
+def insights_section(cfg: dict) -> str:
+    rows = []
+    for name in cfg["premarket"]["instruments"]:
+        try:
+            rows += run_variants(cfg, name)
+        except Exception:
+            pass
+    bullets = "".join(f"<li>{md_inline(c)}</li>" for c in conclusions(rows))
+    table = ""
+    if rows:
+        body = "".join(
+            f'<tr><td>{r["instrument"]}</td><td class="vname">{html.escape(r["variant"])}</td>'
+            f'<td class="num">{r["n_trades"]}</td>'
+            + (f'<td class="num">{r["win_rate"]:.0%}</td>'
+               f'<td class="num">{r["expectancy_r"]:+.2f}</td>'
+               f'<td class="num">{r["total_r"]:+.1f}</td>'
+               if r["n_trades"] else '<td class="num">—</td><td class="num">—</td><td class="num">—</td>')
+            + "</tr>"
+            for r in rows)
+        table = ('<h3>Comparaison des variantes (période accumulée)</h3>'
+                 '<div class="scroll"><table class="fvg"><thead><tr><th></th>'
+                 '<th>variante</th><th>trades</th><th>WR</th><th>R/trade</th>'
+                 '<th>total R</th></tr></thead><tbody>' + body + "</tbody></table></div>")
+    return f'<section class="card"><ul class="conc">{bullets}</ul>{table}</section>'
+
+
 def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     now = datetime.now(NY)
     day_kind, day_label = day_status(now)
@@ -315,6 +342,7 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     instruments_html = "".join(cards) or \
         '<section class="card"><p class="empty">Données de marché indisponibles.</p></section>'
     backtest_html = backtest_section(cfg)
+    insights_html = insights_section(cfg)
 
     try:
         events = fetch_red_folders(cfg)
@@ -514,6 +542,12 @@ ul.check span {{ font-size:14px }}
   border:1px solid var(--line); border-radius:6px; padding:4px 9px; font-size:12px;
   color:var(--ink); pointer-events:none; white-space:nowrap;
   font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
+/* -- conclusions -- */
+ul.conc {{ list-style:none; padding:0; margin:0; font-size:13.5px }}
+ul.conc li {{ padding:8px 0 8px 18px; border-bottom:1px solid var(--line); position:relative }}
+ul.conc li::before {{ content:"▸"; position:absolute; left:0; color:var(--accent-ink) }}
+ul.conc li:last-child {{ border-bottom:none; color:var(--ink3); font-size:12.5px }}
+.vname {{ white-space:normal; min-width:150px }}
 footer {{ color:var(--ink3); font-size:12px; margin-top:30px; line-height:1.6 }}
 a {{ color:var(--accent-ink) }}
 input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); outline-offset:2px }}
@@ -539,8 +573,11 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
   <div class="eyebrow">// Biais &amp; niveaux — D · 4H · 1H</div>
   {instruments_html}
 
-  <div class="eyebrow">// Backtest IFVG — stats évolutives</div>
+  <div class="eyebrow">// Backtest IFVG — stats évolutives (setups A/A+ uniquement)</div>
   {backtest_html}
+
+  <div class="eyebrow">// Conclusions du backtest — mises à jour chaque matin</div>
+  {insights_html}
 
   <div class="eyebrow">// Fenêtre de trading</div>
   <section class="card">

@@ -21,6 +21,7 @@ from trading_os.data.loader import load_csv
 from trading_os.forward.guards import assert_daily_loss_ok
 from trading_os.forward.journal_sync import realized_pnl_today
 from trading_os.news.calendar import fetch_red_folders
+from trading_os.premarket.mtf_bias import day_status
 
 
 def run_semi_auto(cfg: dict, instrument: str, console: Console) -> None:
@@ -58,7 +59,15 @@ def run_semi_auto(cfg: dict, instrument: str, console: Console) -> None:
     last_ts = None
     seen = 0
     ratings: dict[int, object] = {}  # id(fvg) -> InversionRating
+    min_rating = icfg.get("min_rating", 0)
     while True:
+        # market open? (weekend / NYSE holiday -> pause, no forward test)
+        kind, day_label = day_status(datetime.now(NY))
+        if kind == "closed":
+            console.print(f"[dim]{day_label} — surveillance en pause, "
+                          "revérification dans 10 min.[/dim]")
+            time_mod.sleep(600)
+            continue
         # daily-loss guard, re-checked every cycle
         assert_daily_loss_ok(realized_pnl_today(cfg), fcfg["daily_loss_limit_usd"])
         try:
@@ -86,6 +95,11 @@ def run_semi_auto(cfg: dict, instrument: str, console: Console) -> None:
                                   f"grade {r.grade} ({r.total}/10) — "
                                   f"attendre le retest.[/yellow]")
                 elif isinstance(ev, RetestEvent):
+                    r = ratings.get(id(ev.fvg))
+                    if r is not None and r.total < min_rating:
+                        console.print(f"[dim]{ts:%H:%M} Retest IFVG grade {r.grade} "
+                                      f"({r.total}/10) < seuil A — ignoré.[/dim]")
+                        continue
                     if in_ntz:
                         console.print(f"[red]🚫 {ts:%H:%M} Retest IFVG mais NO-TRADE-ZONE "
                                       "news active — on ne touche à rien.[/red]")

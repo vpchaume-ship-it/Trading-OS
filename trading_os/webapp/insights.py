@@ -1,0 +1,124 @@
+"""Backtest-driven conclusions for the dashboard.
+
+Every morning, the engine is run over a small grid of strategy variants on the
+accumulated dataset. The comparison table + auto-written conclusions show what
+the data currently supports (grade filter, invalidation mode, target mode,
+entry point), with an explicit small-sample / overfitting caveat. As the
+dataset grows daily, the conclusions sharpen.
+"""
+
+from __future__ import annotations
+
+import copy
+
+import pandas as pd
+
+from trading_os.backtest.engine import run_backtest
+from trading_os.backtest.metrics import summary
+from trading_os.data.accumulate import load_accumulated
+from trading_os.webapp.stats import MIN_1M_BARS
+
+# (nom affiché, patch appliqué sur cfg["ifvg"])
+VARIANTS: list[tuple[str, dict]] = [
+    ("Config actuelle (A/A+ only)", {}),
+    ("Sans filtre de grade", {"min_rating": 0}),
+    ("Grade ≥ A- (8/10)", {"min_rating": 8}),
+    # body exige open ET close au-delà : il faut désactiver wick_fill_kills sinon
+    # la mèche traversante tue le FVG avant que l'inversion "corps entier" n'arrive
+    ("Invalidation corps entier", {"min_rating": 0, "invalidation_mode": "body",
+                                   "wick_fill_kills": False}),
+    ("Cible RR fixe 2:1", {"min_rating": 0, "target_mode": "fixed_rr"}),
+    ("Entrée milieu de zone", {"min_rating": 0, "retest_entry": "midpoint"}),
+]
+
+
+def _load_df(instrument: str, directory: str = "data"):
+    from pathlib import Path
+    df_1m = load_accumulated(Path(directory) / f"yahoo_{instrument}_1m.csv")
+    df_5m = load_accumulated(Path(directory) / f"yahoo_{instrument}_5m.csv")
+    if df_1m is not None and len(df_1m) >= MIN_1M_BARS:
+        return df_1m, "1min"
+    if df_5m is not None and len(df_5m) >= 500:
+        return df_5m, "5min"
+    return None, None
+
+
+def run_variants(cfg: dict, instrument: str, directory: str = "data") -> list[dict]:
+    df, tf = _load_df(instrument, directory)
+    if df is None:
+        return []
+    rows = []
+    for name, patch in VARIANTS:
+        c = copy.deepcopy(cfg)
+        c["ifvg"]["timeframe"] = tf
+        for k, v in patch.items():
+            if k == "target_mode":
+                c["ifvg"]["target"]["mode"] = v
+            else:
+                c["ifvg"][k] = v
+        res = run_backtest(df, c, instrument)
+        s = summary(res.trades)
+        rows.append({"variant": name, "instrument": instrument, "tf": tf, **s})
+    return rows
+
+
+def conclusions(rows: list[dict]) -> list[str]:
+    """Auto-written French conclusions from the variant grid (all instruments)."""
+    if not rows:
+        return ["Pas encore assez de données accumulées pour comparer les variantes."]
+    out: list[str] = []
+    df = pd.DataFrame(rows)
+
+    base = df[df["variant"].str.startswith("Config actuelle")]
+    base_trades = int(base["n_trades"].sum()) if not base.empty else 0
+    if base_trades == 0:
+        out.append("Aucun setup noté A ou A+ sur la période testée : sur ce timeframe, "
+                   "le critère de vitesse d'inversion est exigeant. Le filtre reste en "
+                   "place — les setups A apparaîtront surtout quand le backtest basculera "
+                   "sur les données 1m accumulées.")
+    elif base_trades < 10:
+        out.append(f"Seulement {base_trades} setup(s) A/A+ sur la période : échantillon "
+                   "trop mince pour conclure — le dataset grandit chaque matin.")
+
+    # le filtre de grade paie-t-il ?
+    nof = df[df["variant"] == "Sans filtre de grade"]
+    amoins = df[df["variant"].str.startswith("Grade ≥ A-")]
+    if not nof.empty and not amoins.empty and nof["n_trades"].sum() >= 10:
+        e_nof = float((nof["expectancy_r"] * nof["n_trades"]).sum() / max(nof["n_trades"].sum(), 1))
+        e_am = float((amoins["expectancy_r"] * amoins["n_trades"]).sum() / max(amoins["n_trades"].sum(), 1))
+        if amoins["n_trades"].sum() >= 5:
+            if e_am > e_nof + 0.05:
+                out.append(f"Le filtre de grade est confirmé par les données : ≥ A- donne "
+                           f"{e_am:+.2f} R/trade contre {e_nof:+.2f} R sans filtre.")
+            elif e_nof > e_am + 0.05:
+                out.append(f"Attention : sur cet échantillon, le filtre de grade ne paie pas "
+                           f"encore ({e_am:+.2f} R filtré vs {e_nof:+.2f} R sans filtre). "
+                           "À réévaluer quand l'historique 1m sera suffisant.")
+
+    # meilleure variante exploitable
+    eligible = df[(df["n_trades"] >= 8)]
+    if not eligible.empty:
+        best = eligible.loc[eligible["expectancy_r"].idxmax()]
+        if best["expectancy_r"] > 0:
+            out.append(f"Piste la plus solide actuellement : « {best['variant']} » sur "
+                       f"{best['instrument']} ({best['n_trades']:.0f} trades, "
+                       f"{best['expectancy_r']:+.2f} R/trade, PF {best['profit_factor']:.2f}).")
+        negative = eligible[eligible["expectancy_r"] <= 0]
+        if len(negative) == len(eligible):
+            out.append("Aucune variante n'est positive sur cet échantillon — prudence : "
+                       "rester en démo et laisser les données s'accumuler avant d'en tirer "
+                       "des règles.")
+
+    # comparaison ES vs NQ
+    per_inst = df[df["variant"] == "Sans filtre de grade"].groupby("instrument")["expectancy_r"].mean()
+    if len(per_inst) == 2:
+        best_i, worst_i = per_inst.idxmax(), per_inst.idxmin()
+        if per_inst[best_i] - per_inst[worst_i] > 0.3:
+            out.append(f"Le modèle IFVG répond nettement mieux sur {best_i} "
+                       f"({per_inst[best_i]:+.2f} R) que sur {worst_i} "
+                       f"({per_inst[worst_i]:+.2f} R) sur cette période.")
+
+    out.append("⚠️ Ces comparaisons portent sur un échantillon court en données "
+               "indicatives : c'est une boussole, pas une vérité. Ne durcir une règle "
+               "qu'après confirmation sur plusieurs semaines ET en forward test.")
+    return out
