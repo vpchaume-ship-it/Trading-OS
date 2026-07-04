@@ -27,7 +27,8 @@ from trading_os.news.calendar import NewsEvent, append_history, fetch_red_folder
 from trading_os.news.scenarios import build_card
 from trading_os.premarket.bias import daily_bias
 from trading_os.premarket.mtf_bias import day_status, instrument_matrix
-from trading_os.webapp.insights import conclusions, run_variants
+from trading_os.webapp.insights import (conclusions, run_variants, save_state,
+                                        select_strategy)
 from trading_os.webapp.stats import dashboard_backtest
 
 FR_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -237,11 +238,12 @@ def equity_svg(trades, uid: str) -> str:
 </div>"""
 
 
-def backtest_section(cfg: dict) -> str:
+def backtest_section(cfg: dict, state: dict) -> str:
     blocks = []
     for name in cfg["premarket"]["instruments"]:
+        sel = state.get(name, {"variant": "défaut", "patch": {}, "reason": ""})
         try:
-            d = dashboard_backtest(cfg, name)
+            d = dashboard_backtest(cfg, name, patch=sel["patch"])
         except Exception:
             d = None
         if d is None:
@@ -287,30 +289,32 @@ def backtest_section(cfg: dict) -> str:
                        f'<thead><tr><th></th><th>trades</th><th>WR</th><th>R moy</th>'
                        f'</tr></thead><tbody>{rows}</tbody></table></div>')
 
+        auto_line = (f'<p class="autotune">⚙ Réglage auto : '
+                     f'<strong>{html.escape(sel["variant"])}</strong> — '
+                     f'{html.escape(sel["reason"])}</p>')
         blocks.append(f"""
 <section class="card">
   <header class="card-head"><h2>{name}</h2><span class="price">{meta}</span></header>
+  {auto_line}
   {kpis}
   <h3>Equity (R cumulés, coûts inclus)</h3>
   {equity_svg(d["trades"], name)}
   {tables}
 </section>""")
     note = ('<p class="empty">Backtest réel (moteur IFVG, fenêtre 9:30–11:30, coûts '
-            'et slippage inclus) sur données Yahoo accumulées quotidiennement — les '
-            'stats se consolident chaque matin. Bascule automatique 5m → 1m dès que '
-            'l’historique 1m accumulé suffit. Données indicatives en attendant '
-            'l’export MT5.</p>')
+            'et slippage inclus) sur données Yahoo accumulées quotidiennement, avec '
+            'le réglage choisi automatiquement chaque matin par les garde-fous. '
+            'Bascule automatique 5m → 1m dès que l’historique 1m accumulé suffit. '
+            'Données indicatives en attendant l’export MT5.</p>')
     return "".join(blocks) + note
 
 
-def insights_section(cfg: dict) -> str:
-    rows = []
-    for name in cfg["premarket"]["instruments"]:
-        try:
-            rows += run_variants(cfg, name)
-        except Exception:
-            pass
-    bullets = "".join(f"<li>{md_inline(c)}</li>" for c in conclusions(rows))
+def insights_section(rows: list[dict], state: dict) -> str:
+    chosen = "".join(
+        f'<li>⚙ <strong>{inst}</strong> → « {html.escape(sel["variant"])} » '
+        f'({html.escape(sel["reason"])})</li>'
+        for inst, sel in state.items())
+    bullets = chosen + "".join(f"<li>{md_inline(c)}</li>" for c in conclusions(rows))
     table = ""
     if rows:
         body = "".join(
@@ -341,8 +345,18 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
             asof = d["asof"]
     instruments_html = "".join(cards) or \
         '<section class="card"><p class="empty">Données de marché indisponibles.</p></section>'
-    backtest_html = backtest_section(cfg)
-    insights_html = insights_section(cfg)
+    # auto-tune: run the variant grid, pick per-instrument settings, persist them
+    variant_rows: list[dict] = []
+    for name in cfg["premarket"]["instruments"]:
+        try:
+            variant_rows += run_variants(cfg, name)
+        except Exception:
+            pass
+    state = {name: select_strategy(variant_rows, name)
+             for name in cfg["premarket"]["instruments"]}
+    save_state(state)
+    backtest_html = backtest_section(cfg, state)
+    insights_html = insights_section(variant_rows, state)
 
     try:
         events = fetch_red_folders(cfg)
@@ -541,6 +555,8 @@ ul.check span {{ font-size:14px }}
 .eq .tip {{ position:absolute; top:6px; left:8px; background:var(--raised);
   border:1px solid var(--line); border-radius:6px; padding:4px 9px; font-size:12px;
   color:var(--ink); pointer-events:none; white-space:nowrap;
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
+.autotune {{ font-size:12.5px; color:var(--accent-ink); margin:8px 0 2px;
   font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
 /* -- conclusions -- */
 ul.conc {{ list-style:none; padding:0; margin:0; font-size:13.5px }}

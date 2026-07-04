@@ -62,6 +62,57 @@ def run_variants(cfg: dict, instrument: str, directory: str = "data") -> list[di
     return rows
 
 
+# ------------------------------------------------------------ auto-tune
+
+# Garde-fous du choix automatique : une variante n'est retenue que si elle est
+# statistiquement défendable sur l'échantillon courant.
+GUARDS = {"min_trades": 10, "min_expectancy": 0.10, "min_pf": 1.20}
+PATCHES = {name: patch for name, patch in VARIANTS}
+FALLBACK_NAME = "Prudence — A/A+ uniquement (défaut)"
+STATE_PATH = "data/strategy_state.json"
+
+
+def select_strategy(rows: list[dict], instrument: str) -> dict:
+    """Pick the best defensible variant for one instrument, or the safe fallback."""
+    cand = [r for r in rows if r["instrument"] == instrument
+            and r["n_trades"] >= GUARDS["min_trades"]
+            and r["expectancy_r"] >= GUARDS["min_expectancy"]
+            and r["profit_factor"] >= GUARDS["min_pf"]]
+    if not cand:
+        return {"variant": FALLBACK_NAME, "patch": {},
+                "reason": ("aucune variante ne passe les garde-fous "
+                           f"(≥{GUARDS['min_trades']} trades, "
+                           f"≥{GUARDS['min_expectancy']:+.2f} R/trade, "
+                           f"PF ≥{GUARDS['min_pf']:.2f}) — collecte en cours")}
+    best = max(cand, key=lambda r: (r["expectancy_r"], r["profit_factor"]))
+    return {"variant": best["variant"], "patch": PATCHES[best["variant"]],
+            "reason": (f"{best['n_trades']} trades · {best['expectancy_r']:+.2f} R/trade "
+                       f"· PF {best['profit_factor']:.2f} sur {best['tf']}")}
+
+
+def save_state(state: dict, path: str = STATE_PATH) -> None:
+    import json
+    from datetime import datetime
+    from pathlib import Path
+    payload = {"chosen_at": datetime.now().isoformat(timespec="seconds"),
+               "guards": GUARDS, "instruments": state}
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def load_state(path: str = STATE_PATH) -> dict | None:
+    import json
+    from pathlib import Path
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def conclusions(rows: list[dict]) -> list[str]:
     """Auto-written French conclusions from the variant grid (all instruments)."""
     if not rows:

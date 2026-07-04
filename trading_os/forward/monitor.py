@@ -46,6 +46,18 @@ def run_semi_auto(cfg: dict, instrument: str, console: Console) -> None:
                       "prudence, NTZ non chargées ![/yellow]")
         ntz = []
 
+    # auto-tuned settings chosen by the daily data-driven selection
+    from trading_os.webapp.insights import load_state
+    state = load_state()
+    sel = (state or {}).get("instruments", {}).get(instrument)
+    patch = sel["patch"] if sel else {}
+    for k, v in patch.items():
+        if k == "target_mode":
+            icfg = {**icfg, "target": {**icfg["target"], "mode": v}}
+        else:
+            icfg = {**icfg, k: v}
+    variant_label = sel["variant"] if sel else "config de base"
+
     tracker = FVGTracker(
         tick_size=spec["tick_size"], min_gap_ticks=icfg["min_gap_ticks"],
         invalidation_mode=icfg["invalidation_mode"], wick_fill_kills=icfg["wick_fill_kills"],
@@ -53,6 +65,7 @@ def run_semi_auto(cfg: dict, instrument: str, console: Console) -> None:
         max_retests=icfg["max_retests_per_zone"])
 
     console.print(Panel(f"Semi-auto {instrument} — détection IFVG en temps réel.\n"
+                        f"Réglage auto appliqué : {variant_label}\n"
                         "Le système NOTIFIE, vous validez manuellement sur Tradovate demo.\n"
                         "Ctrl+C pour arrêter.", title="Mode semi-auto", style="cyan"))
 

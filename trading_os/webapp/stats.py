@@ -17,7 +17,9 @@ from trading_os.data.accumulate import load_accumulated
 MIN_1M_BARS = 15_000   # ~2-3 semaines de séance : en dessous, le 5m est plus parlant
 
 
-def dashboard_backtest(cfg: dict, instrument: str, directory: str = "data") -> dict | None:
+def dashboard_backtest(cfg: dict, instrument: str, directory: str = "data",
+                       patch: dict | None = None) -> dict | None:
+    """patch = auto-tuned ifvg overrides chosen by insights.select_strategy."""
     df_1m = load_accumulated(Path(directory) / f"yahoo_{instrument}_1m.csv")
     df_5m = load_accumulated(Path(directory) / f"yahoo_{instrument}_5m.csv")
 
@@ -30,6 +32,11 @@ def dashboard_backtest(cfg: dict, instrument: str, directory: str = "data") -> d
 
     cfg2 = copy.deepcopy(cfg)
     cfg2["ifvg"]["timeframe"] = tf
+    for k, v in (patch or {}).items():
+        if k == "target_mode":
+            cfg2["ifvg"]["target"]["mode"] = v
+        else:
+            cfg2["ifvg"][k] = v
     result = run_backtest(df, cfg2, instrument)
     if result.trades.empty:
         return {"tf": tf, "n_bars": len(df), "start": df.index[0], "end": df.index[-1],
