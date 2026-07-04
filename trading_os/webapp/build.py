@@ -21,7 +21,7 @@ from trading_os.config import load_config
 from trading_os.core.fvg import detect_unmitigated_fvgs
 from trading_os.core.timeutils import NY
 from trading_os.data.loader import resample
-from trading_os.data.yahoo import fetch_daily, fetch_h1
+from trading_os.data.yahoo import clean_intraday, fetch_daily, fetch_h1
 from trading_os.journal.store import Journal
 from trading_os.news.calendar import NewsEvent, append_history, fetch_red_folders
 from trading_os.news.scenarios import build_card
@@ -58,7 +58,7 @@ def instrument_data(name: str, cfg: dict) -> dict | None:
     now = datetime.now(NY)
     try:
         daily = fetch_daily(name, "6mo")
-        h1 = fetch_h1(name, "60d")
+        h1 = clean_intraday(fetch_h1(name, "60d"), 60)
     except Exception:
         return None
     # drop today's partial session so "previous day" is a completed one
@@ -392,6 +392,8 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
 
     kz = cfg["killzones"]["ny_am"]
     asof_txt = f"{asof:%H:%M}" if asof is not None else "--:--"
+    asof_txt = (f"{FR_DAYS[asof.weekday()][:3]} {asof:%H:%M}"
+                if asof is not None else asof_txt)
     kz_pill = "bull" if day_kind == "trading" else "warn"
     kz_note = ("Seule fenêtre autorisée par la méthodologie. Pas de trade en dehors, "
                "pas de trade en no-trade-zone news, 1 micro contrat max, démo uniquement."

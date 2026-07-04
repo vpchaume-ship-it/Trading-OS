@@ -15,9 +15,9 @@ from pathlib import Path
 import pandas as pd
 
 from trading_os.core.timeutils import NY
-from trading_os.data.yahoo import fetch
+from trading_os.data.yahoo import clean_intraday, fetch
 
-FETCH_PLAN = [("1m", "7d", "1m"), ("5m", "60d", "5m")]
+FETCH_PLAN = [("1m", "7d", "1m", 1), ("5m", "60d", "5m", 5)]
 
 
 def load_accumulated(path: str | Path) -> pd.DataFrame | None:
@@ -37,12 +37,14 @@ def accumulate(instrument: str, directory: str | Path = "data") -> dict[str, tup
     Returns {interval: (path, n_total_bars)}.
     """
     out: dict[str, tuple[Path, int]] = {}
-    for interval, range_, suffix in FETCH_PLAN:
+    for interval, range_, suffix, minutes in FETCH_PLAN:
         path = Path(directory) / f"yahoo_{instrument}_{suffix}.csv"
-        fresh = fetch(instrument, range_, interval)
+        fresh = clean_intraday(fetch(instrument, range_, interval), minutes)
         old = load_accumulated(path)
         merged = fresh if old is None else pd.concat([old, fresh])
         merged = merged[~merged.index.duplicated(keep="last")].sort_index()
+        # one-time cleanup of previously stored artifacts (misaligned quote rows)
+        merged = clean_intraday(merged, minutes)
         path.parent.mkdir(parents=True, exist_ok=True)
         # store timestamps in UTC ISO form for a stable round-trip
         to_save = merged.copy()

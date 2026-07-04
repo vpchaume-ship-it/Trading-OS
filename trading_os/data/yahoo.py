@@ -36,6 +36,20 @@ def fetch(instrument: str, range_: str = "60d", interval: str = "1h") -> pd.Data
     return df
 
 
+def clean_intraday(df: pd.DataFrame, interval_minutes: int,
+                   now: pd.Timestamp | None = None) -> pd.DataFrame:
+    """Drop Yahoo artifacts: rows not aligned to the interval grid (the feed
+    appends a live-quote row at an arbitrary minute) and the still-forming bar
+    (its end lies in the future) — signals must only see completed candles."""
+    if df.empty:
+        return df
+    aligned = df[(df.index.minute % interval_minutes == 0) if interval_minutes < 60
+                 else (df.index.minute == 0)]
+    now = now or pd.Timestamp.now(tz=NY)
+    cutoff = now - pd.Timedelta(minutes=interval_minutes)
+    return aligned[aligned.index <= cutoff]
+
+
 def fetch_daily(instrument: str, range_: str = "6mo") -> pd.DataFrame:
     return fetch(instrument, range_, "1d")
 

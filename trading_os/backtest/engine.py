@@ -63,9 +63,8 @@ def _load_ntz_intervals(path: str, before_min: int, after_min: int) -> list[tupl
     hist = pd.read_csv(path)
     if hist.empty:
         return []
-    times = pd.to_datetime(hist["datetime_ny"])
-    if times.dt.tz is None:
-        times = times.dt.tz_localize("America/New_York")
+    # utc=True handles mixed EDT/EST offsets (-04:00 and -05:00 in one file)
+    times = pd.to_datetime(hist["datetime_ny"], utc=True).dt.tz_convert("America/New_York")
     return [(t - pd.Timedelta(minutes=before_min), t + pd.Timedelta(minutes=after_min))
             for t in times]
 
