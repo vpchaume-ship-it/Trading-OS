@@ -26,6 +26,7 @@ from trading_os.journal.store import Journal
 from trading_os.news.calendar import NewsEvent, append_history, fetch_red_folders
 from trading_os.news.scenarios import build_card
 from trading_os.premarket.bias import daily_bias
+from trading_os.premarket.mtf_bias import day_status, instrument_matrix
 from trading_os.webapp.stats import dashboard_backtest
 
 FR_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -64,6 +65,7 @@ def instrument_data(name: str, cfg: dict) -> dict | None:
         return None
     last_price = float(h1["close"].iloc[-1]) if len(h1) else float(daily["close"].iloc[-1])
     bias, reason = daily_bias(completed)
+    matrix = instrument_matrix(h1, completed, tick, cfg["ifvg"]["min_gap_ticks"])
     prev, prev2 = completed.iloc[-1], completed.iloc[-2]
     week = completed.resample("W-FRI").agg({"high": "max", "low": "min"}).dropna()
     pw = week.iloc[-2] if len(week) >= 2 else None
@@ -87,7 +89,7 @@ def instrument_data(name: str, cfg: dict) -> dict | None:
     fvgs.sort(key=lambda f: abs((f["bottom"] + f["top"]) / 2 - last_price))
 
     return {"name": name, "price": last_price, "bias": bias, "reason": reason,
-            "levels": levels, "fvgs": fvgs[:6],
+            "matrix": matrix, "levels": levels, "fvgs": fvgs[:6],
             "prev_day": prev.name, "asof": h1.index[-1] if len(h1) else prev.name}
 
 
@@ -114,7 +116,25 @@ def ladder_html(levels: list[tuple[str, float]], price: float) -> str:
 
 
 def instrument_card(d: dict) -> str:
-    cls, glyph, label = BIAS_META[d["bias"]]
+    # header pill = combined D bias from the multi-TF matrix
+    d_bias = next(m for m in d["matrix"] if m.tf == "D")
+    cls, glyph, label = BIAS_META[d_bias.bias]
+
+    tf_pills, sig_rows = [], []
+    for m in d["matrix"]:
+        c, g, lab = BIAS_META[m.bias]
+        tf_pills.append(f'<span class="pill tfp {c}">{m.tf} {g} {lab}</span>')
+        for s in m.signals:
+            arrow = "▲" if s.vote > 0 else ("▼" if s.vote < 0 else "◆")
+            sc = "bull" if s.vote > 0 else ("bear" if s.vote < 0 else "warn")
+            sig_rows.append(f'<li><span class="stf">{m.tf}</span>'
+                            f'<span class="sarrow {sc}">{arrow}</span>'
+                            f'<span class="sname">{s.name}</span> — '
+                            f'{html.escape(s.detail)}</li>')
+    tf_html = (f'<div class="tfrow">{"".join(tf_pills)}</div>'
+               f'<details class="sig"><summary>Signaux (structure · momentum · FVG · PDH/PDL)'
+               f'</summary><ul>{"".join(sig_rows)}</ul></details>')
+
     fvg_rows = "".join(
         f'<tr><td class="tf">{f["tf"]}</td>'
         f'<td><span class="chip {"bull" if f["dir"] == "bullish" else "bear"}">'
@@ -128,6 +148,7 @@ def instrument_card(d: dict) -> str:
     <span class="price num">{px(d["price"])}</span>
     <span class="pill {cls}">{glyph} {label}</span>
   </header>
+  {tf_html}
   <p class="reason">{html.escape(d["reason"])}</p>
   {ladder_html(d["levels"], d["price"])}
   <h3>FVG non mitigés (du plus proche au plus loin)</h3>
@@ -283,6 +304,7 @@ def backtest_section(cfg: dict) -> str:
 
 def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     now = datetime.now(NY)
+    day_kind, day_label = day_status(now)
 
     cards, asof = [], None
     for name in cfg["premarket"]["instruments"]:
@@ -328,6 +350,12 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
 
     kz = cfg["killzones"]["ny_am"]
     asof_txt = f"{asof:%H:%M}" if asof is not None else "--:--"
+    kz_pill = "bull" if day_kind == "trading" else "warn"
+    kz_note = ("Seule fenêtre autorisée par la méthodologie. Pas de trade en dehors, "
+               "pas de trade en no-trade-zone news, 1 micro contrat max, démo uniquement."
+               if day_kind == "trading" else
+               "Marché fermé aujourd'hui — aucune fenêtre de trading. Profitez-en pour "
+               "la revue du journal et la préparation de la semaine.")
 
     page = f"""<title>Trading OS — Prémarché</title>
 <style>
@@ -370,6 +398,13 @@ body {{ background:var(--bg); color:var(--ink); margin:0;
 .top .date {{ color:var(--ink2); font-size:12.5px; }}
 .demo {{ margin-left:auto; font-size:10.5px; letter-spacing:.1em; color:var(--bear-ink);
   border:1px solid var(--bear); padding:2px 7px; border-radius:3px; }}
+/* -- day banner -- */
+.banner {{ margin-top:14px; padding:8px 14px; border-radius:8px; font-size:12.5px;
+  letter-spacing:.08em; font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
+.banner.trading {{ color:var(--bull-ink); border:1px solid var(--bull);
+  background:color-mix(in srgb, var(--bull) 10%, transparent) }}
+.banner.closed {{ color:var(--warn-ink); border:1px solid var(--warn);
+  background:color-mix(in srgb, var(--warn) 10%, transparent) }}
 /* -- sections -- */
 .eyebrow {{ font-size:11px; letter-spacing:.18em; color:var(--ink3);
   text-transform:uppercase; margin:26px 2px 10px; }}
@@ -384,6 +419,18 @@ body {{ background:var(--bg); color:var(--ink); margin:0;
 .pill.bear {{ color:var(--bear-ink); border-color:var(--bear); background:color-mix(in srgb, var(--bear) 14%, transparent) }}
 .pill.warn {{ color:var(--warn-ink); border-color:var(--warn); background:color-mix(in srgb, var(--warn) 14%, transparent) }}
 .reason {{ color:var(--ink2); font-size:13.5px; margin:8px 0 12px }}
+/* -- multi-timeframe bias row -- */
+.tfrow {{ display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 2px }}
+.pill.tfp {{ margin-left:0; font-size:12px; padding:4px 10px }}
+details.sig {{ margin:6px 0 2px }}
+details.sig ul {{ list-style:none; padding:0; margin:6px 0 0; font-size:12.5px; color:var(--ink2) }}
+details.sig li {{ padding:3px 0; border-bottom:1px solid var(--line) }}
+.stf {{ display:inline-block; width:26px; color:var(--ink3);
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace; font-size:11px }}
+.sarrow {{ margin-right:5px }}
+.sarrow.bull {{ color:var(--bull-ink) }} .sarrow.bear {{ color:var(--bear-ink) }}
+.sarrow.warn {{ color:var(--warn-ink) }}
+.sname {{ font-weight:600 }}
 h3 {{ font-size:11px; letter-spacing:.14em; text-transform:uppercase;
   color:var(--ink3); margin:16px 0 8px; font-weight:600 }}
 /* -- ladder -- */
@@ -483,22 +530,23 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
 </div>
 <div class="wrap">
 
-  <div class="eyebrow">// Biais &amp; niveaux</div>
-  {instruments_html}
-
-  <div class="eyebrow">// Backtest IFVG — stats évolutives</div>
-  {backtest_html}
+  <div class="banner {day_kind}">{day_label}</div>
 
   <div class="eyebrow">// Red folders USD — aujourd'hui</div>
   {news_html}
   {week_html}
 
+  <div class="eyebrow">// Biais &amp; niveaux — D · 4H · 1H</div>
+  {instruments_html}
+
+  <div class="eyebrow">// Backtest IFVG — stats évolutives</div>
+  {backtest_html}
+
   <div class="eyebrow">// Fenêtre de trading</div>
   <section class="card">
-    <div class="kzline"><span class="pill bull">NY AM</span>
+    <div class="kzline"><span class="pill {kz_pill}">NY AM</span>
       <span class="num">{kz["start"]} → {kz["end"]} (heure NY)</span></div>
-    <p class="reason">Seule fenêtre autorisée par la méthodologie. Pas de trade en dehors,
-    pas de trade en no-trade-zone news, 1 micro contrat max, démo uniquement.</p>
+    <p class="reason">{kz_note}</p>
     <h3>Mes stats par killzone (forward test)</h3>
     {journal_html}
   </section>
