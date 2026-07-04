@@ -53,7 +53,9 @@ ifvg:
   # Les setups sous ce seuil sont ignorés. 0 = pas de filtre ; le PDF ne trade que A-/B+ et mieux (≥7).
   min_rating: 0
   target:
-    mode: "fixed_rr"         # fixed_rr / liquidity
+    # Conforme à vos PDF : la cible est la prochaine liquidité (swing confirmé
+    # le plus proche dans le sens du trade). "fixed_rr" reste dispo pour comparer.
+    mode: "liquidity"        # liquidity / fixed_rr
     fixed_rr: 2.0            # RR pour le mode fixed_rr
     liquidity_min_rr: 1.5    # en mode liquidity : RR minimal exigé, sinon setup ignoré
     swing_strength: 3        # nb de barres de chaque côté pour définir un swing (mode liquidity)

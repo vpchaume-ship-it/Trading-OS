@@ -124,6 +124,7 @@ def _menu_table() -> Table:
     t.add_row("3", "🛰️  Forward test DEMO", "Tradovate demo : semi-auto, journal, rapport hebdo")
     t.add_row("4", "🌅 Rapport prémarché", "biais du jour, niveaux, FVG HTF, liquidité, checklist")
     t.add_row("5", "📚 Connaissances", "vos PDF ICT : indexation, recherche, concordance")
+    t.add_row("6", "📱 Dashboard mobile", "génère la page prémarché publiée sur votre téléphone")
     t.add_row("0", "🚪 Quitter", "")
     return t
 
@@ -135,14 +136,15 @@ def main_menu() -> None:
         console.print(_header(cfg))
         console.print(_menu_table())
         choice = Prompt.ask(Text("Choix", style=f"bold {ACCENT}"),
-                            choices=["0", "1", "2", "3", "4", "5"], default="4")
+                            choices=["0", "1", "2", "3", "4", "5", "6"], default="4")
         try:
             if choice == "0":
                 console.print(Panel("À demain. [bold]Discipline > conviction.[/bold] 👋",
                                     box=box.ROUNDED, border_style=DIM))
                 return
             {"1": menu_news, "2": menu_backtest, "3": menu_forward,
-             "4": menu_premarket, "5": menu_knowledge}[choice](cfg)
+             "4": menu_premarket, "5": menu_knowledge,
+             "6": menu_dashboard}[choice](cfg)
         except KeyboardInterrupt:
             console.print(f"\n[{DIM}]Interrompu — retour au menu.[/{DIM}]")
         except Exception as exc:
@@ -289,6 +291,19 @@ def menu_premarket(cfg: dict) -> None:
     if Confirm.ask("Afficher dans le terminal ?", default=True):
         console.print(Panel(Markdown(Path(path).read_text(encoding="utf-8")),
                             box=box.ROUNDED, border_style=DIM))
+
+
+# ---------------------------------------------------------------- Dashboard
+def menu_dashboard(cfg: dict) -> None:
+    from trading_os.webapp.build import build_dashboard
+
+    console.print(Rule("📱 Dashboard mobile", style=ACCENT))
+    with console.status(f"[{ACCENT}]Données Yahoo Finance + ForexFactory…"):
+        path = build_dashboard(cfg, "journal/reports/dashboard.html")
+    console.print(f"[green]✓ Page générée :[/green] {path}")
+    console.print(f"[{DIM}]La version téléphone est republiée automatiquement chaque "
+                  f"matin de semaine (routine planifiée) — pas besoin de la lancer "
+                  f"à la main, sauf pour un rafraîchissement immédiat.[/{DIM}]")
 
 
 # ---------------------------------------------------------------- Knowledge

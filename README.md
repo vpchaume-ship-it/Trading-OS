@@ -36,22 +36,34 @@ data/                       # vos CSV de données de marché
 journal/                    # trades, rapports de backtest, rapports prémarché
 ```
 
-## Données de marché (MetaTrader 5)
+## 📱 Sur téléphone — dashboard qui se met à jour tout seul
+
+Le dashboard prémarché (biais PDH/PDL, niveaux, FVG non mitigés, red folders +
+no-trade-zones, checklist interactive) est publié comme page web sur une URL
+stable et **régénéré automatiquement chaque matin de semaine (10:00 UTC)** par
+une routine planifiée — données Yahoo Finance (ES=F/NQ=F) et ForexFactory,
+aucun MT5 requis. Ajoutez l'URL à l'écran d'accueil de votre téléphone.
+
+Génération manuelle : `python -m trading_os.webapp.build` (menu 6 du terminal).
+
+## Données de marché (MetaTrader 5) — configuration en UNE commande
 
 Le package Python `MetaTrader5` ne fonctionne que **sous Windows avec le terminal
-MT5 ouvert**. Le flux de travail est donc :
+MT5 ouvert**. Sur votre machine Windows, terminal MT5 ouvert et connecté :
 
-1. Sur votre machine Windows :
-   ```bash
-   pip install MetaTrader5 pandas
-   python scripts/export_mt5.py --symbol ES --days 730 --out data/ES_1m.csv
-   python scripts/export_mt5.py --symbol NQ --days 730 --out data/NQ_1m.csv
-   ```
-   (le nom du symbole dépend de votre broker — vérifiez le Market Watch)
-2. Renseignez `data.csv_timezone` dans `config.yaml` avec le fuseau de votre
-   serveur MT5 (souvent `Etc/GMT-2` ou `Etc/GMT-3`).
-3. Le backtest et le rapport prémarché lisent ces CSV. Tout autre export CSV
-   au format `timestamp,open,high,low,close,volume` fonctionne aussi.
+```bash
+pip install MetaTrader5 pandas
+python scripts/mt5_setup.py --days 365
+```
+
+Le script détecte automatiquement : les symboles indices US disponibles chez
+votre broker (ES/MES/US500/SP500… et NQ/MNQ/USTEC/NAS100…), le fuseau horaire du
+serveur, met à jour `config.yaml` tout seul et exporte l'historique 1m vers
+`data/ES_1m.csv` / `data/NQ_1m.csv`. Il vous avertit si le compte connecté n'est
+pas un compte demo.
+
+Pour ré-exporter ponctuellement ou d'autres symboles : `scripts/export_mt5.py`.
+Tout autre export CSV au format `timestamp,open,high,low,close,volume` marche aussi.
 
 Pour le mode semi-auto (Module 3), lancez l'export en continu :
 `python scripts/export_mt5.py --symbol ES --watch --out data/live.csv`

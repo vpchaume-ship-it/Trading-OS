@@ -26,25 +26,22 @@ Analyse des trois documents de `knowledge/` face au code (mise à jour : 2026-07
    `premarket/bias.py` et affiché en tête de chaque section instrument du rapport
    prémarché, avec rappel de confirmation CISD 1H.
 
-## ⚖️ Points d'arbitrage (dites-moi comment trancher)
+## ⚖️ Arbitrages (décisions du 2026-07-04)
 
-1. **Clôture corps entier vs simple clôture** — le PDF IFVG Rating (grades A-/B) dit
-   que dans le chop « the trade can't take place until the body closes fully
-   over/under the FVG ». Le code offre les deux (`ifvg.invalidation_mode: close|body`),
-   défaut actuel : `close`. → Passer le défaut à `body` ? Le backtest peut comparer les deux.
-2. **Critères contextuels non codés du rating Dodgy** — liquidity sweep préalable,
-   « delivery from another FVG », premium/discount, FVG « singulier », cibles parmi
-   les 7 (EQH/EQL/ITH/ITL/data highs-lows/LRLR). La notation codée couvre la bougie
-   d'inversion (Candle Closure /10) ; ces critères de contexte demandent un
-   jugement de lecture de marché. Codables partiellement (sweep préalable,
-   premium/discount vs range du jour) si vous voulez une v2 du score.
-3. **Cibles** — vos PDF privilégient la liquidité (EQH/EQL, ITH/ITL) plutôt qu'un RR
-   fixe. Le mode `target.mode: liquidity` existe déjà (swing confirmé le plus proche) ;
-   défaut actuel : `fixed_rr 2.0`. → Basculer le défaut sur `liquidity` ?
-4. **Timeframe d'entrée** — Daily Bias (M15 orderflow) : M15 + M5 + M1 alignés avant
-   toute entrée M1. Le backtest actuel travaille sur un seul timeframe (1m par votre
-   choix). Un filtre multi-timeframe (orderflow M15/M5 aligné) est codable en v2 —
-   à prioriser si le backtest 1m brut montre trop de faux signaux.
+1. **Cibles = liquidité opposée** — ✅ TRANCHÉ : `target.mode: liquidity` est le
+   défaut (swing confirmé le plus proche, RR minimal `liquidity_min_rr`).
+   `fixed_rr` reste disponible pour comparaison en backtest.
+2. **Filtre multi-timeframe M15+M5+M1** — ✅ TRANCHÉ : non nécessaire, abandonné.
+3. **Clôture simple vs corps entier (`invalidation_mode`)** — EN ATTENTE. Deux
+   lectures possibles de la « clôture franche » qui valide l'inversion :
+   `close` (défaut actuel) = le prix de clôture passe la borne, même si la bougie
+   a une grande mèche ; `body` = l'open ET le close sont au-delà (corps entier,
+   ce que le PDF exige dans les conditions choppy). Le backtest permet de
+   comparer les deux en changeant une ligne de config.
+4. **Critères contextuels non codés du rating Dodgy** — liquidity sweep préalable,
+   « delivery from another FVG », premium/discount, FVG « singulier ». La notation
+   codée couvre la bougie d'inversion (/10) ; ces critères de contexte restent un
+   jugement de lecture de marché (codables partiellement en v2 si souhaité).
 
 ## ⚠️ Limites d'extraction
 
