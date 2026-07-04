@@ -32,12 +32,9 @@ Analyse des trois documents de `knowledge/` face au code (mise à jour : 2026-07
    défaut (swing confirmé le plus proche, RR minimal `liquidity_min_rr`).
    `fixed_rr` reste disponible pour comparaison en backtest.
 2. **Filtre multi-timeframe M15+M5+M1** — ✅ TRANCHÉ : non nécessaire, abandonné.
-3. **Clôture simple vs corps entier (`invalidation_mode`)** — EN ATTENTE. Deux
-   lectures possibles de la « clôture franche » qui valide l'inversion :
-   `close` (défaut actuel) = le prix de clôture passe la borne, même si la bougie
-   a une grande mèche ; `body` = l'open ET le close sont au-delà (corps entier,
-   ce que le PDF exige dans les conditions choppy). Le backtest permet de
-   comparer les deux en changeant une ligne de config.
+3. **Clôture simple vs corps entier (`invalidation_mode`)** — ✅ TRANCHÉ : `close`
+   (le prix de clôture passe la borne suffit). `body` reste disponible dans
+   config.yaml pour comparaison en backtest.
 4. **Critères contextuels non codés du rating Dodgy** — liquidity sweep préalable,
    « delivery from another FVG », premium/discount, FVG « singulier ». La notation
    codée couvre la bougie d'inversion (/10) ; ces critères de contexte restent un

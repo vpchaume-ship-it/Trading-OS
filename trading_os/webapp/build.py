@@ -26,6 +26,7 @@ from trading_os.journal.store import Journal
 from trading_os.news.calendar import NewsEvent, append_history, fetch_red_folders
 from trading_os.news.scenarios import build_card
 from trading_os.premarket.bias import daily_bias
+from trading_os.webapp.stats import dashboard_backtest
 
 FR_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 FR_MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
@@ -157,6 +158,129 @@ def news_card(e: NewsEvent, cfg: dict, now: datetime) -> str:
 </article>"""
 
 
+def equity_svg(trades, uid: str) -> str:
+    """Interactive cumulative-R equity curve as inline SVG (single series)."""
+    import json
+
+    cum, pts_meta = [], []
+    total = 0.0
+    for _, t in trades.iterrows():
+        total += t["net_r"]
+        cum.append(total)
+        when = pd.Timestamp(t["exit_time"])
+        pts_meta.append(f"#{len(cum)} · {when:%d/%m} · {t['net_r']:+.2f} R · cumul {total:+.1f} R")
+
+    W, H, L, R, T, B = 640, 230, 46, 14, 16, 28
+    n = len(cum)
+    lo, hi = min(0.0, min(cum)), max(0.0, max(cum))
+    if hi - lo < 1e-9:
+        hi = lo + 1.0
+    pad = (hi - lo) * 0.08
+    lo, hi = lo - pad, hi + pad
+    xs = [L + (W - L - R) * (i / max(n - 1, 1)) for i in range(n)]
+    ys = [T + (H - T - B) * (1 - (v - lo) / (hi - lo)) for v in cum]
+    y0 = T + (H - T - B) * (1 - (0 - lo) / (hi - lo))
+
+    # ~4 nice horizontal gridlines
+    import math
+    step = max(round((hi - lo) / 4), 1)
+    grid, labels = [], []
+    g = math.ceil(lo / step) * step
+    while g <= hi:
+        gy = T + (H - T - B) * (1 - (g - lo) / (hi - lo))
+        grid.append(f'<line x1="{L}" y1="{gy:.1f}" x2="{W - R}" y2="{gy:.1f}" class="grid"/>')
+        labels.append(f'<text x="{L - 7}" y="{gy + 3.5:.1f}" class="ax">{g:+g}</text>')
+        g += step
+
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
+    area = f"{xs[0]:.1f},{y0:.1f} " + line + f" {xs[-1]:.1f},{y0:.1f}"
+    first = pd.Timestamp(trades.iloc[0]["exit_time"])
+    last = pd.Timestamp(trades.iloc[-1]["exit_time"])
+    pts = [[round(x, 1), round(y, 1), m] for x, y, m in zip(xs, ys, pts_meta)]
+
+    return f"""
+<div class="eq" id="eq-{uid}" data-pts='{json.dumps(pts, ensure_ascii=False)}'>
+  <svg viewBox="0 0 {W} {H}" role="img" aria-label="Courbe d'equity en R cumulés">
+    {''.join(grid)}{''.join(labels)}
+    <line x1="{L}" y1="{y0:.1f}" x2="{W - R}" y2="{y0:.1f}" class="zero"/>
+    <polygon points="{area}" class="area"/>
+    <polyline points="{line}" class="curve"/>
+    <circle cx="{xs[-1]:.1f}" cy="{ys[-1]:.1f}" r="4" class="enddot"/>
+    <text x="{xs[-1] - 6:.1f}" y="{ys[-1] - 9:.1f}" class="endlab">{cum[-1]:+.1f} R</text>
+    <text x="{L}" y="{H - 8}" class="ax" text-anchor="start">{first:%d/%m}</text>
+    <text x="{W - R}" y="{H - 8}" class="ax" text-anchor="end">{last:%d/%m}</text>
+    <circle r="4.5" class="hoverdot" style="display:none"/>
+  </svg>
+  <div class="tip" style="display:none"></div>
+</div>"""
+
+
+def backtest_section(cfg: dict) -> str:
+    blocks = []
+    for name in cfg["premarket"]["instruments"]:
+        try:
+            d = dashboard_backtest(cfg, name)
+        except Exception:
+            d = None
+        if d is None:
+            blocks.append(f'<section class="card"><header class="card-head">'
+                          f'<h2>{name}</h2></header><p class="empty">En attente '
+                          f'd’accumulation de données — la routine du matin nourrit '
+                          f'le dataset jour après jour.</p></section>')
+            continue
+        s = d["stats"]
+        meta = (f'{d["tf"]} · {d["n_bars"]:,} barres · '
+                f'{d["start"]:%d/%m/%Y} → {d["end"]:%d/%m/%Y}').replace(",", " ")
+        if s["n_trades"] == 0:
+            blocks.append(f'<section class="card"><header class="card-head">'
+                          f'<h2>{name}</h2><span class="price">{meta}</span></header>'
+                          f'<p class="empty">Aucun setup IFVG complet sur la période '
+                          f'testée (fenêtre 9:30–11:30 uniquement) — le dataset '
+                          f'grandit chaque matin.</p></section>')
+            continue
+
+        def signed(v, fmt):
+            cls = "pos" if v > 0 else "neg"
+            return f'<span class="kval {cls}">{v:{fmt}}</span>'
+
+        kpis = f"""
+  <div class="kpis">
+    <div class="kpi"><span class="klab">Espérance / trade</span>{signed(s["expectancy_r"], "+.2f")}<span class="ksub">R net</span></div>
+    <div class="kpi"><span class="klab">Win rate</span><span class="kval">{s["win_rate"]:.0%}</span><span class="ksub">{s["n_trades"]} trades</span></div>
+    <div class="kpi"><span class="klab">Profit factor</span><span class="kval">{s["profit_factor"]:.2f}</span><span class="ksub">gains/pertes</span></div>
+    <div class="kpi"><span class="klab">Total</span>{signed(s["total_r"], "+.1f")}<span class="ksub">DD max {s["max_drawdown_r"]:.1f} R</span></div>
+  </div>"""
+
+        tables = ""
+        for title, bd in (("Par grade d'inversion", d["by_grade"]),
+                          ("Par killzone", d["by_kz"])):
+            if bd is None or bd.empty:
+                continue
+            rows = "".join(
+                f'<tr><td>{idx}</td><td class="num">{int(r["trades"])}</td>'
+                f'<td class="num">{r["win_rate"]:.0%}</td>'
+                f'<td class="num">{r["avg_r"]:+.2f}</td></tr>'
+                for idx, r in bd.iterrows())
+            tables += (f'<h3>{title}</h3><div class="scroll"><table class="fvg">'
+                       f'<thead><tr><th></th><th>trades</th><th>WR</th><th>R moy</th>'
+                       f'</tr></thead><tbody>{rows}</tbody></table></div>')
+
+        blocks.append(f"""
+<section class="card">
+  <header class="card-head"><h2>{name}</h2><span class="price">{meta}</span></header>
+  {kpis}
+  <h3>Equity (R cumulés, coûts inclus)</h3>
+  {equity_svg(d["trades"], name)}
+  {tables}
+</section>""")
+    note = ('<p class="empty">Backtest réel (moteur IFVG, fenêtre 9:30–11:30, coûts '
+            'et slippage inclus) sur données Yahoo accumulées quotidiennement — les '
+            'stats se consolident chaque matin. Bascule automatique 5m → 1m dès que '
+            'l’historique 1m accumulé suffit. Données indicatives en attendant '
+            'l’export MT5.</p>')
+    return "".join(blocks) + note
+
+
 def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     now = datetime.now(NY)
 
@@ -168,6 +292,7 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
             asof = d["asof"]
     instruments_html = "".join(cards) or \
         '<section class="card"><p class="empty">Données de marché indisponibles.</p></section>'
+    backtest_html = backtest_section(cfg)
 
     try:
         events = fetch_red_folders(cfg)
@@ -314,6 +439,34 @@ ul.check label {{ display:flex; gap:12px; padding:10px 2px; cursor:pointer; alig
 ul.check input {{ accent-color:var(--accent); width:18px; height:18px; margin-top:2px; flex:none }}
 ul.check input:checked + span {{ color:var(--ink3); text-decoration:line-through }}
 ul.check span {{ font-size:14px }}
+/* -- backtest KPIs & equity chart -- */
+.kpis {{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:10px 0 4px }}
+@media (min-width:560px) {{ .kpis {{ grid-template-columns:repeat(4,1fr) }} }}
+.kpi {{ background:var(--raised); border:1px solid var(--line); border-radius:8px;
+  padding:9px 11px; display:flex; flex-direction:column; gap:1px }}
+.klab {{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink3);
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
+.kval {{ font-size:20px; font-weight:700; font-variant-numeric:tabular-nums;
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
+.kval.pos {{ color:var(--bull-ink) }} .kval.neg {{ color:var(--bear-ink) }}
+.ksub {{ font-size:11px; color:var(--ink3) }}
+.eq {{ position:relative; margin:4px 0 6px }}
+.eq svg {{ width:100%; height:auto; display:block }}
+.eq .grid {{ stroke:var(--line); stroke-width:1 }}
+.eq .zero {{ stroke:var(--ink3); stroke-width:1; stroke-dasharray:3 4 }}
+.eq .ax, .eq .endlab {{ fill:var(--ink3); font-size:11px; text-anchor:end;
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums }}
+.eq .endlab {{ fill:var(--accent-ink); font-weight:700 }}
+.eq .curve {{ fill:none; stroke:var(--accent); stroke-width:2;
+  stroke-linejoin:round; stroke-linecap:round }}
+.eq .area {{ fill:var(--accent); opacity:.13 }}
+.eq .enddot {{ fill:var(--accent) }}
+.eq .hoverdot {{ fill:var(--bg); stroke:var(--accent); stroke-width:2 }}
+.eq .tip {{ position:absolute; top:6px; left:8px; background:var(--raised);
+  border:1px solid var(--line); border-radius:6px; padding:4px 9px; font-size:12px;
+  color:var(--ink); pointer-events:none; white-space:nowrap;
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
 footer {{ color:var(--ink3); font-size:12px; margin-top:30px; line-height:1.6 }}
 a {{ color:var(--accent-ink) }}
 input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); outline-offset:2px }}
@@ -332,6 +485,9 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
 
   <div class="eyebrow">// Biais &amp; niveaux</div>
   {instruments_html}
+
+  <div class="eyebrow">// Backtest IFVG — stats évolutives</div>
+  {backtest_html}
 
   <div class="eyebrow">// Red folders USD — aujourd'hui</div>
   {news_html}
@@ -360,6 +516,31 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
 
 <script>
 (function () {{
+  // equity-curve hover: nearest point -> dot + tooltip
+  document.querySelectorAll(".eq").forEach(function (wrap) {{
+    var svg = wrap.querySelector("svg"), tip = wrap.querySelector(".tip"),
+        dot = svg.querySelector(".hoverdot"),
+        pts = JSON.parse(wrap.dataset.pts || "[]");
+    if (!pts.length) return;
+    function hide() {{ tip.style.display = "none"; dot.style.display = "none"; }}
+    svg.addEventListener("pointerleave", hide);
+    svg.addEventListener("pointermove", function (ev) {{
+      var r = svg.getBoundingClientRect();
+      var vx = (ev.clientX - r.left) / r.width * 640;
+      var best = pts[0], bd = 1e9;
+      pts.forEach(function (p) {{
+        var d = Math.abs(p[0] - vx);
+        if (d < bd) {{ bd = d; best = p; }}
+      }});
+      dot.setAttribute("cx", best[0]); dot.setAttribute("cy", best[1]);
+      dot.style.display = "";
+      tip.textContent = best[2];
+      tip.style.display = "";
+      var frac = best[0] / 640;
+      tip.style.left = (frac > 0.55 ? 8 : Math.round(frac * r.width) + 12) + "px";
+    }});
+  }});
+
   var day = new Date().toISOString().slice(0, 10);
   var stored = {{}};
   try {{ stored = JSON.parse(localStorage.getItem("tos-check") || "{{}}"); }} catch (e) {{}}

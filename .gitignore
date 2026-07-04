@@ -10,11 +10,16 @@ venv/
 # Données de marché et contenus personnels
 data/*.csv
 data/*.parquet
+# …sauf les données Yahoo accumulées par la routine quotidienne (persistance
+# entre sessions cloud : c'est la base du backtest évolutif du dashboard)
+!data/yahoo_*.csv
 # NB : les PDF de knowledge/ SONT versionnés (dépôt privé) pour survivre aux
 # sessions — retirez-les du dépôt si vous ne le souhaitez pas.
 journal/backtests/
 journal/reports/
-journal/news/
+journal/news/*
+# l'historique des red folders est versionné (étiquetage NTZ du backtest)
+!journal/news/history.csv
 journal/trades.csv
 journal/forward_state.json
 knowledge/index.json
