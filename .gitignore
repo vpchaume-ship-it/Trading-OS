@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Secrets — ne JAMAIS committer
+.env
+
+# Données de marché et contenus personnels
+data/*.csv
+data/*.parquet
+knowledge/*.pdf
+journal/backtests/
+journal/reports/
+journal/news/
+journal/trades.csv
+journal/forward_state.json
+knowledge/index.json

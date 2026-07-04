@@ -1,0 +1,108 @@
+# ============================================================
+# Trading OS — configuration centrale
+# Tous les horaires de killzones sont en heure de New York.
+# ============================================================
+
+instruments:
+  ES:
+    tick_size: 0.25
+    tick_value: 12.50        # USD par tick, contrat mini ES
+    micro_tick_value: 1.25   # MES
+    mt5_symbol: "ES"         # à adapter au nom exact chez votre broker MT5
+  NQ:
+    tick_size: 0.25
+    tick_value: 5.00         # USD par tick, contrat mini NQ
+    micro_tick_value: 0.50   # MNQ
+    mt5_symbol: "NQ"
+
+data:
+  directory: "data"
+  # Fuseau horaire des timestamps de vos CSV.
+  # Les serveurs MT5 sont souvent en UTC+2/UTC+3 (heure Europe de l'Est) : "Etc/GMT-2" ou "Europe/Bucharest".
+  # Si vos exports sont déjà en UTC, mettre "UTC".
+  csv_timezone: "UTC"
+  # Fuseau de référence pour toute la logique (killzones, sessions) — ne pas changer.
+  exchange_timezone: "America/New_York"
+
+killzones:
+  london:  { start: "02:00", end: "05:00" }
+  ny_am:   { start: "08:30", end: "11:00" }
+  ny_pm:   { start: "13:30", end: "16:00" }
+
+ifvg:
+  timeframe: "1min"          # timeframe d'exécution : 1min / 5min / 15min
+  min_gap_ticks: 4           # taille minimale du FVG en ticks
+  # Type de clôture requise pour valider l'inversion :
+  #   close = une clôture au-delà de la borne opposée suffit
+  #   body  = le corps entier de la bougie (open ET close) doit être au-delà
+  invalidation_mode: "close"
+  # Un FVG entièrement rempli par une mèche (sans clôture franche) est-il mort ?
+  wick_fill_kills: true
+  fvg_max_age_bars: 240      # un FVG non touché expire après N barres
+  ifvg_max_age_bars: 120     # une zone inversée non retestée expire après N barres
+  retest_entry: "proximal"   # proximal / midpoint / distal (bord d'entrée dans la zone inversée)
+  stop_buffer_ticks: 2       # buffer au-delà du bord opposé de la zone pour le stop
+  max_retests_per_zone: 1    # nombre d'entrées autorisées par zone inversée
+  allowed_killzones: ["london", "ny_am", "ny_pm"]
+  target:
+    mode: "fixed_rr"         # fixed_rr / liquidity
+    fixed_rr: 2.0            # RR pour le mode fixed_rr
+    liquidity_min_rr: 1.5    # en mode liquidity : RR minimal exigé, sinon setup ignoré
+    swing_strength: 3        # nb de barres de chaque côté pour définir un swing (mode liquidity)
+
+backtest:
+  instrument: "ES"
+  contract: "mini"           # mini / micro — impacte tick_value et commissions
+  csv_file: ""               # chemin du CSV 1m ; vide = demandé dans le menu
+  eod_flat_time: "16:55"     # clôture forcée des positions avant la fermeture (heure NY)
+  costs:
+    commission_per_side:     # USD par contrat et par side (ordres + frais exchange, valeurs réalistes)
+      mini: 2.25
+      micro: 0.85
+    slippage_ticks_stop: 1   # slippage sur les sorties au stop (ordre marché)
+    slippage_ticks_entry: 0  # entrée limite : 0 par défaut
+  respect_no_trade_zones: true
+  news_history_csv: "journal/news/history.csv"   # accumulé par le module 1
+
+news:
+  # Flux JSON public du calendrier ForexFactory (semaine courante)
+  feed_url: "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+  currency: "USD"
+  impact: "High"
+  no_trade_zone:
+    minutes_before: 30
+    minutes_after: 15
+
+forward:
+  # GARDE-FOUS — le code refuse de fonctionner hors demo, quelle que soit cette config.
+  max_contracts: 1
+  allowed_symbols: ["MES", "MNQ"]      # micros uniquement
+  daily_loss_limit_usd: 150            # arrêt automatique du module
+  poll_seconds: 30
+  live_csv: ""                         # CSV alimenté en continu par scripts/export_mt5.py --watch
+
+journal:
+  directory: "journal"
+
+premarket:
+  instruments: ["ES", "NQ"]
+  htf_timeframes: ["1h", "4h", "1d"]   # FVG non mitigés recherchés sur ces TF
+  equal_level_tolerance_ticks: 2       # tolérance pour equal highs/lows
+  swing_strength: 5
+  checklist:
+    - "Le biais HTF est-il défini (daily/H4) et mon trade va-t-il dans son sens ?"
+    - "Suis-je dans une killzone autorisée ?"
+    - "Y a-t-il un red folder à moins de 30 min ? Si oui : NO TRADE."
+    - "Le FVG a-t-il été invalidé par une clôture franche (pas juste une mèche) ?"
+    - "Mon stop est-il au-delà de la zone inversée, taille de position calculée AVANT l'entrée ?"
+    - "Le RR vers la cible (liquidité opposée) est-il d'au moins 2:1 ?"
+    - "Ai-je déjà pris ma perte max du jour ? Si oui : terminal fermé."
+
+knowledge:
+  directory: "knowledge"
+  index_file: "knowledge/index.json"
+  # Concepts surveillés : l'indexeur extrait les passages des PDF qui les définissent,
+  # pour comparaison avec l'implémentation du code.
+  concepts: ["ifvg", "inversion fair value gap", "fvg", "fair value gap", "killzone",
+             "liquidity", "liquidité", "judas", "displacement", "ndog", "nwog",
+             "equal highs", "equal lows", "smt"]
