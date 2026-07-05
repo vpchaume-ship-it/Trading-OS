@@ -12,9 +12,12 @@ cd "$(dirname "$0")/.."
 OUT="${1:-dashboard_out.html}"
 BRANCH="claude/trading-os-ifvg-terminal-pize5y"
 
-# Porte pré-ouverture DST-proof : le déclencheur fire à 13:20 ET 14:20 UTC pour
-# couvrir 9:20 New York été (EDT) comme hiver (EST). On ne travaille que si l'on
-# est réellement dans la fenêtre 9:10–9:35 NY ; l'autre firing sort tout de suite.
+# Porte pré-ouverture DST-proof. Le cron UTC ne suit pas l'heure d'été de New York :
+# un firing à 13:20 UTC vaut 9:20 NY en été (EDT) et 8:20 NY en hiver (EST). On
+# accepte donc toute la fenêtre pré-marché 8:00–9:35 NY -> le firing unique tombe
+# toujours juste avant l'ouverture, quelle que soit la saison, sans réglage manuel.
+# (Si un second firing à 14:20 UTC est ajouté, il donne 9:20 NY pile en hiver ;
+#  en été il tomberait à 10:20 NY, hors fenêtre, et serait donc ignoré ici.)
 if [ "${TOS_SKIP_GATE:-0}" != "1" ]; then
   python - << 'PYGATE' || { echo "Hors fenêtre pré-ouverture NY — firing ignoré."; exit 0; }
 import sys
@@ -22,7 +25,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 now = datetime.now(ZoneInfo("America/New_York"))
 mins = now.hour * 60 + now.minute
-sys.exit(0 if 9 * 60 + 10 <= mins <= 9 * 60 + 35 else 1)
+sys.exit(0 if 8 * 60 <= mins <= 9 * 60 + 35 else 1)
 PYGATE
 fi
 
