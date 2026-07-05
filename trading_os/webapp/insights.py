@@ -29,7 +29,22 @@ VARIANTS: list[tuple[str, dict]] = [
                                    "wick_fill_kills": False}),
     ("Cible RR fixe 2:1", {"min_rating": 0, "target_mode": "fixed_rr"}),
     ("Entrée milieu de zone", {"min_rating": 0, "retest_entry": "midpoint"}),
+    ("Break-even à +1R", {"min_rating": 0, "exit_mode": "be"}),
+    ("Trailing 1R sans cible", {"min_rating": 0, "exit_mode": "trail"}),
+    ("Midpoint + break-even", {"min_rating": 0, "retest_entry": "midpoint",
+                               "exit_mode": "be"}),
 ]
+
+
+def apply_patch(cfg: dict, patch: dict) -> None:
+    """Apply a variant patch onto cfg['ifvg'] (mutates cfg in place)."""
+    for k, v in patch.items():
+        if k == "target_mode":
+            cfg["ifvg"]["target"]["mode"] = v
+        elif k == "exit_mode":
+            cfg["ifvg"].setdefault("exit", {})["mode"] = v
+        else:
+            cfg["ifvg"][k] = v
 
 
 def _load_df(instrument: str, directory: str = "data"):
@@ -51,11 +66,7 @@ def run_variants(cfg: dict, instrument: str, directory: str = "data") -> list[di
     for name, patch in VARIANTS:
         c = copy.deepcopy(cfg)
         c["ifvg"]["timeframe"] = tf
-        for k, v in patch.items():
-            if k == "target_mode":
-                c["ifvg"]["target"]["mode"] = v
-            else:
-                c["ifvg"][k] = v
+        apply_patch(c, patch)
         res = run_backtest(df, c, instrument)
         s = summary(res.trades)
         rows.append({"variant": name, "instrument": instrument, "tf": tf, **s})

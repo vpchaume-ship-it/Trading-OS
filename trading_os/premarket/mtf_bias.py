@@ -90,6 +90,33 @@ def _fvg_context(df: pd.DataFrame, tick: float, min_gap_ticks: int) -> Signal:
     return Signal("fvg", 0, f"FVG le plus proche à contre-position ({zone})")
 
 
+def _smt(df: pd.DataFrame, sib: pd.DataFrame | None, sib_name: str,
+         window: int = 20) -> Signal:
+    """SMT divergence vs the correlated sibling (ES<->NQ), ICT style.
+
+    Compare the last `window` bars with the `window` before: if exactly one of
+    the pair prints a lower low, the crack is bullish; if exactly one prints a
+    higher high, bearish. Both or neither -> no signal.
+    """
+    if sib is None or len(df) < 2 * window or len(sib) < 2 * window:
+        return Signal("smt", 0, "pas de comparaison possible")
+    a, b = df.tail(2 * window), sib.tail(2 * window)
+    self_ll = a["low"].iloc[window:].min() < a["low"].iloc[:window].min()
+    sib_ll = b["low"].iloc[window:].min() < b["low"].iloc[:window].min()
+    self_hh = a["high"].iloc[window:].max() > a["high"].iloc[:window].max()
+    sib_hh = b["high"].iloc[window:].max() > b["high"].iloc[:window].max()
+    ll_div, hh_div = self_ll != sib_ll, self_hh != sib_hh
+    if ll_div and not hh_div:
+        who = "ce marché" if self_ll else sib_name
+        return Signal("smt", 1, f"divergence haussière : le plus bas de {who} "
+                                "n'est pas confirmé par l'autre")
+    if hh_div and not ll_div:
+        who = "ce marché" if self_hh else sib_name
+        return Signal("smt", -1, f"divergence baissière : le plus haut de {who} "
+                                 "n'est pas confirmé par l'autre")
+    return Signal("smt", 0, "pas de divergence ES/NQ nette")
+
+
 def _label(score: int) -> str:
     if score >= 2:
         return "haussier"
@@ -99,26 +126,33 @@ def _label(score: int) -> str:
 
 
 def tf_bias(tf: str, df: pd.DataFrame, tick: float, min_gap_ticks: int,
-            strength: int = 3, extra: Signal | None = None) -> TFBias:
+            strength: int = 3, extras: list[Signal] | None = None) -> TFBias:
     signals = [_structure(df, strength), _momentum(df),
                _fvg_context(df, tick, min_gap_ticks)]
-    if extra is not None:
-        signals.append(extra)
+    signals += extras or []
     score = sum(s.vote for s in signals)
     return TFBias(tf, _label(score), score, signals)
 
 
 def instrument_matrix(h1: pd.DataFrame, daily: pd.DataFrame, tick: float,
-                      min_gap_ticks: int) -> list[TFBias]:
-    """[D, 4H, 1H] biases for one instrument (daily = completed sessions)."""
+                      min_gap_ticks: int,
+                      sib_h1: pd.DataFrame | None = None,
+                      sib_daily: pd.DataFrame | None = None,
+                      sib_name: str = "l'autre indice") -> list[TFBias]:
+    """[D, 4H, 1H] biases for one instrument (daily = completed sessions),
+    with SMT divergence against the correlated sibling when provided."""
     pdhl_bias, pdhl_reason = daily_bias(daily)
-    extra = Signal("PDH/PDL", {"haussier": 1, "baissier": -1, "neutre": 0}[pdhl_bias],
-                   pdhl_reason)
+    pdhl = Signal("PDH/PDL", {"haussier": 1, "baissier": -1, "neutre": 0}[pdhl_bias],
+                  pdhl_reason)
     h4 = resample(h1, "4h")
+    sib_h4 = resample(sib_h1, "4h") if sib_h1 is not None else None
     return [
-        tf_bias("D", daily, tick, min_gap_ticks, strength=2, extra=extra),
-        tf_bias("4H", h4, tick, min_gap_ticks, strength=3),
-        tf_bias("1H", h1, tick, min_gap_ticks, strength=3),
+        tf_bias("D", daily, tick, min_gap_ticks, strength=2,
+                extras=[pdhl, _smt(daily, sib_daily, sib_name, window=10)]),
+        tf_bias("4H", h4, tick, min_gap_ticks, strength=3,
+                extras=[_smt(h4, sib_h4, sib_name)]),
+        tf_bias("1H", h1, tick, min_gap_ticks, strength=3,
+                extras=[_smt(h1, sib_h1, sib_name)]),
     ]
 
 

@@ -30,13 +30,10 @@ def dashboard_backtest(cfg: dict, instrument: str, directory: str = "data",
     else:
         return None
 
+    from trading_os.webapp.insights import apply_patch
     cfg2 = copy.deepcopy(cfg)
     cfg2["ifvg"]["timeframe"] = tf
-    for k, v in (patch or {}).items():
-        if k == "target_mode":
-            cfg2["ifvg"]["target"]["mode"] = v
-        else:
-            cfg2["ifvg"][k] = v
+    apply_patch(cfg2, patch or {})
     result = run_backtest(df, cfg2, instrument)
     if result.trades.empty:
         return {"tf": tf, "n_bars": len(df), "start": df.index[0], "end": df.index[-1],

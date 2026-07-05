@@ -53,6 +53,13 @@ ifvg:
   # Les setups sous ce seuil sont ignorés (backtest ET forward test).
   # DÉCISION UTILISATEUR : A et A+ uniquement -> 9.
   min_rating: 9
+  # Gestion de sortie : full = stop/cible classiques ; be = stop ramené à
+  # l'entrée une fois +1R atteint ; trail = stop suiveur à 1R derrière
+  # l'extrême favorable (la cible est ignorée, on laisse courir).
+  exit:
+    mode: "full"             # full / be / trail
+    be_trigger_rr: 1.0       # déclenchement du break-even (en R)
+    trail_rr: 1.0            # distance du stop suiveur (en R)
   target:
     # Conforme à vos PDF : la cible est la prochaine liquidité (swing confirmé
     # le plus proche dans le sens du trade). "fixed_rr" reste dispo pour comparer.
@@ -94,6 +101,19 @@ forward:
 
 journal:
   directory: "journal"
+
+# Simulation d'éval prop firm sur le backtest auto-réglé (indicatif).
+# Valeurs Lucid 50K Flex vérifiées en ligne — à re-vérifier avant toute éval réelle.
+propfirm:
+  name: "Lucid 50K Flex"
+  start_balance: 50000
+  profit_target: 3000
+  max_loss_limit: 2000          # trailing en fin de journée (EOD), intraday ignoré
+  lock_at_start: true           # le plancher se fige au solde initial une fois atteint
+  min_days: 2
+  consistency_pct: 50           # aucun jour > 50 % du profit total (phase éval)
+  max_micros: 40                # 4 minis ES ou 40 micros
+  risk_per_trade_usd: 200       # sizing simulé en micros
 
 premarket:
   instruments: ["ES", "NQ"]

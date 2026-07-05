@@ -22,6 +22,7 @@ journal/reports/
 journal/news/*
 # l'historique des red folders est versionné (étiquetage NTZ du backtest)
 !journal/news/history.csv
-journal/trades.csv
+# journal/trades.csv EST versionné (persistance du journal Tradovate demo entre
+# sessions cloud) — il ne contient que des données de trades demo, pas de secret
 journal/forward_state.json
 knowledge/index.json

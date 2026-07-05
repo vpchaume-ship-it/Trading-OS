@@ -40,6 +40,8 @@ class Position:
     entry_idx: int
     killzone: str | None
     in_ntz: bool
+    cur_stop: float = 0.0    # dynamic stop (be/trail modes move it)
+    best: float = 0.0        # most favorable price reached (completed bars)
 
 
 @dataclass
@@ -115,6 +117,10 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     stop_buffer = icfg["stop_buffer_ticks"] * tick
     entry_mode = icfg["retest_entry"]
     min_rating = icfg.get("min_rating", 0)
+    exit_cfg = icfg.get("exit", {})
+    exit_mode = exit_cfg.get("mode", "full")          # full | be | trail
+    be_trigger = exit_cfg.get("be_trigger_rr", 1.0)
+    trail_rr = exit_cfg.get("trail_rr", 1.0)
 
     setups: list[PendingSetup] = []
     position: Position | None = None
@@ -188,16 +194,34 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         # ---- 1) manage open position (exits before anything else) -------
         if position is not None:
             s = position.setup
+            risk = s.risk_ticks * tick
+            take_target = exit_mode != "trail"        # trail mode rides, no target
             if s.direction == Direction.BULLISH:
-                if l <= s.stop:
-                    close_position(position, ts, s.stop - slip_stop, "stop"); position = None
-                elif h >= s.target:
+                if l <= position.cur_stop:
+                    close_position(position, ts, position.cur_stop - slip_stop, "stop")
+                    position = None
+                elif take_target and h >= s.target:
                     close_position(position, ts, s.target, "target"); position = None
+                else:
+                    # stop moves take effect from the NEXT bar (no lookahead,
+                    # conservative on same-bar stop-vs-trigger ambiguity)
+                    position.best = max(position.best, h)
+                    if exit_mode == "be" and position.best >= s.entry + be_trigger * risk:
+                        position.cur_stop = max(position.cur_stop, s.entry)
+                    elif exit_mode == "trail" and position.best >= s.entry + trail_rr * risk:
+                        position.cur_stop = max(position.cur_stop, position.best - trail_rr * risk)
             else:
-                if h >= s.stop:
-                    close_position(position, ts, s.stop + slip_stop, "stop"); position = None
-                elif l <= s.target:
+                if h >= position.cur_stop:
+                    close_position(position, ts, position.cur_stop + slip_stop, "stop")
+                    position = None
+                elif take_target and l <= s.target:
                     close_position(position, ts, s.target, "target"); position = None
+                else:
+                    position.best = min(position.best, l)
+                    if exit_mode == "be" and position.best <= s.entry - be_trigger * risk:
+                        position.cur_stop = min(position.cur_stop, s.entry)
+                    elif exit_mode == "trail" and position.best <= s.entry - trail_rr * risk:
+                        position.cur_stop = min(position.cur_stop, position.best + trail_rr * risk)
             if position is not None and ts.time() >= eod_flat:
                 close_position(position, ts, c, "eod_flat"); position = None
 
@@ -238,7 +262,8 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
                 continue
             entry_px = stp.entry + (slip_entry if stp.direction == Direction.BULLISH else -slip_entry)
             stp.entry = entry_px
-            position = Position(stp, ts, i, kz.label(ts), in_zone_news)
+            position = Position(stp, ts, i, kz.label(ts), in_zone_news,
+                                cur_stop=stp.stop, best=entry_px)
             # conservative same-bar stop check
             if stp.direction == Direction.BULLISH and l <= stp.stop:
                 close_position(position, ts, stp.stop - slip_stop, "stop"); position = None
@@ -257,6 +282,6 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         "target": dict(target_cfg), "allowed_killzones": list(allowed_kz),
         "commission_rt_usd": commission_rt, "slippage_ticks_stop": costs["slippage_ticks_stop"],
         "respect_no_trade_zones": respect_ntz, "n_news_events": len(ntz),
-        "min_rating": min_rating,
+        "min_rating": min_rating, "exit_mode": exit_mode,
     }
     return result
