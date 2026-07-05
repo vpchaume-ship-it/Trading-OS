@@ -12,6 +12,20 @@ cd "$(dirname "$0")/.."
 OUT="${1:-dashboard_out.html}"
 BRANCH="claude/trading-os-ifvg-terminal-pize5y"
 
+# Porte pré-ouverture DST-proof : le déclencheur fire à 13:20 ET 14:20 UTC pour
+# couvrir 9:20 New York été (EDT) comme hiver (EST). On ne travaille que si l'on
+# est réellement dans la fenêtre 9:10–9:35 NY ; l'autre firing sort tout de suite.
+if [ "${TOS_SKIP_GATE:-0}" != "1" ]; then
+  python - << 'PYGATE' || { echo "Hors fenêtre pré-ouverture NY — firing ignoré."; exit 0; }
+import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
+now = datetime.now(ZoneInfo("America/New_York"))
+mins = now.hour * 60 + now.minute
+sys.exit(0 if 9 * 60 + 10 <= mins <= 9 * 60 + 35 else 1)
+PYGATE
+fi
+
 retry() {  # retry <n> <cmd...>
   local n=$1; shift
   for i in $(seq 1 "$n"); do "$@" && return 0; echo "échec ($i/$n), attente 30s…"; sleep 30; done

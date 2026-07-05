@@ -357,12 +357,23 @@ def insights_section(rows: list[dict], state: dict) -> str:
 def journal_section(cfg: dict) -> str:
     df = Journal(cfg["journal"]["directory"]).load()
     if df.empty:
-        return ('<section class="card"><p class="empty">Journal vide pour l\'instant. '
-                'La synchronisation Tradovate demo est automatique chaque matin dès que '
-                'vos identifiants demo (TRADOVATE_USERNAME, TRADOVATE_PASSWORD, '
-                'TRADOVATE_CID, TRADOVATE_SECRET) sont configurés dans '
-                'l\'environnement cloud — vos trades, win rate et courbe de PnL '
-                'apparaîtront ici tout seuls.</p></section>')
+        return """
+<section class="card connect">
+  <div class="connect-head"><span class="cbadge">CONNEXION</span>
+    <h3 style="margin:0">Brancher le journal Tradovate</h3></div>
+  <p class="reason">Une fois connecté, vos trades demo remontent tout seuls chaque
+  matin : win rate, PnL cumulé, stats par killzone et derniers trades s'affichent ici.</p>
+  <ol class="steps">
+    <li><b>Activer l'API dans Tradovate</b> — compte demo → <i>Application Settings →
+      API Access</i> → générer une clé. Vous obtenez un <b>Client ID (cid)</b> et un
+      <b>Secret</b>. (L'API refuse le simple login : « app not registered ».)</li>
+    <li><b>Renseigner 4 variables</b> dans l'environnement cloud (Réglages Claude Code) :
+      <code>TRADOVATE_USERNAME</code>, <code>TRADOVATE_PASSWORD</code>,
+      <code>TRADOVATE_CID</code>, <code>TRADOVATE_SECRET</code>.</li>
+  </ol>
+  <p class="empty">Lecture seule (récupération des fills) — aucune prise de position
+  automatique, démo uniquement.</p>
+</section>"""
     df = df.sort_values("exit_time").reset_index(drop=True)
     pnl = df["pnl_usd"]
     wins, losses = pnl[pnl > 0], pnl[pnl <= 0]
@@ -466,12 +477,14 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     _try_sync_journal(cfg)
 
     frames = {name: fetch_frames(name) for name in cfg["premarket"]["instruments"]}
-    cards, asof = [], None
+    cards, asof, heros = [], None, []
     for name in cfg["premarket"]["instruments"]:
         d = instrument_data(name, cfg, frames)
         if d:
             cards.append(instrument_card(d))
             asof = d["asof"]
+            d_bias = next(m for m in d["matrix"] if m.tf == "D")
+            heros.append({"name": name, "price": d["price"], "bias": d_bias.bias})
     instruments_html = "".join(cards) or \
         '<section class="card"><p class="empty">Données de marché indisponibles.</p></section>'
     # auto-tune: run the variant grid, pick per-instrument settings, persist them
@@ -505,6 +518,34 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     week = [e for e in events if e.time_ny.date() > now.date()]
     news_html = "".join(news_card(e, cfg, now) for e in today) or \
         '<p class="allclear">✓ Aucun red folder USD aujourd’hui — journée technique pure.</p>'
+
+    # --- hero « en un coup d'œil » ----------------------------------------
+    upcoming = [e for e in today if e.time_ny > now]
+    if day_kind == "closed":
+        news_tile = ('<div class="htile"><span class="hlab">Marché</span>'
+                     '<span class="hval warn">FERMÉ</span>'
+                     '<span class="hsub">week-end / férié</span></div>')
+    elif upcoming:
+        nxt = upcoming[0]
+        mins = int((nxt.time_ny - now).total_seconds() // 60)
+        cd = f"{mins // 60}h{mins % 60:02d}" if mins >= 60 else f"{mins} min"
+        sev = "bear" if mins <= 45 else "warn"
+        news_tile = (f'<div class="htile"><span class="hlab">Prochain red folder</span>'
+                     f'<span class="hval {sev}">{cd}</span>'
+                     f'<span class="hsub">{html.escape(nxt.title[:22])}</span></div>')
+    else:
+        news_tile = ('<div class="htile"><span class="hlab">News</span>'
+                     '<span class="hval bull">RAS</span>'
+                     '<span class="hsub">journée technique</span></div>')
+    short = {"haussier": "HAUSSE", "baissier": "BAISSE", "neutre": "NEUTRE"}
+    hero_tiles = news_tile
+    for h in heros:
+        c, g, _ = BIAS_META[h["bias"]]
+        hero_tiles += (f'<div class="htile"><span class="hlab">{h["name"]} · biais jour</span>'
+                       f'<span class="hval {c}">{g} {short[h["bias"]]}</span>'
+                       f'<span class="hsub num">{px(h["price"])}</span></div>')
+    hero_html = f'<div class="hero">{hero_tiles}</div>'
+
     week_html = ""
     if week:
         items = "".join(f'<li><span class="num">{FR_DAYS[e.time_ny.weekday()][:3]} '
@@ -587,6 +628,29 @@ body {{ background:var(--bg); color:var(--ink); margin:0;
   background:color-mix(in srgb, var(--bull) 10%, transparent) }}
 .banner.closed {{ color:var(--warn-ink); border:1px solid var(--warn);
   background:color-mix(in srgb, var(--warn) 10%, transparent) }}
+/* -- hero « en un coup d'œil » -- */
+.hero {{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:12px }}
+.htile {{ background:var(--surface); border:1px solid var(--line); border-radius:10px;
+  padding:11px 12px; display:flex; flex-direction:column; gap:3px; min-width:0 }}
+.hlab {{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink3);
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
+.hval {{ font-size:16px; font-weight:700; letter-spacing:.02em; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
+.hval.bull {{ color:var(--bull-ink) }} .hval.bear {{ color:var(--bear-ink) }}
+.hval.warn {{ color:var(--warn-ink) }}
+.hsub {{ font-size:11px; color:var(--ink3); white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis }}
+/* -- connect card -- */
+.card.connect {{ border-color:var(--accent) }}
+.connect-head {{ display:flex; align-items:center; gap:9px; margin-bottom:2px }}
+.cbadge {{ font-size:10px; letter-spacing:.14em; color:var(--accent-ink);
+  border:1px solid var(--accent); border-radius:4px; padding:2px 7px;
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
+ol.steps {{ margin:6px 0 4px; padding-left:20px; font-size:13px; color:var(--ink2) }}
+ol.steps li {{ padding:5px 0 5px 4px }}
+ol.steps code {{ background:var(--raised); border:1px solid var(--line); border-radius:4px;
+  padding:1px 5px; font-size:12px }}
 /* -- sections -- */
 .eyebrow {{ font-size:11px; letter-spacing:.18em; color:var(--ink3);
   text-transform:uppercase; margin:26px 2px 10px; }}
@@ -721,6 +785,8 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
 <div class="wrap">
 
   <div class="banner {day_kind}">{day_label}</div>
+
+  {hero_html}
 
   <div class="eyebrow">// Red folders USD — aujourd'hui</div>
   {news_html}
