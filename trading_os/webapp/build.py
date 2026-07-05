@@ -22,12 +22,10 @@ from trading_os.core.fvg import detect_unmitigated_fvgs
 from trading_os.core.timeutils import NY
 from trading_os.data.loader import resample
 from trading_os.data.yahoo import clean_intraday, fetch_daily, fetch_h1
-from trading_os.journal.store import Journal
 from trading_os.news.calendar import NewsEvent, append_history, fetch_red_folders
 from trading_os.news.scenarios import build_card
 from trading_os.premarket.bias import daily_bias
 from trading_os.premarket.mtf_bias import day_status, instrument_matrix
-from trading_os.journal.store import Journal
 from trading_os.webapp.insights import (conclusions, run_variants, save_state,
                                         select_strategy)
 from trading_os.webapp.propsim import simulate
@@ -354,72 +352,6 @@ def insights_section(rows: list[dict], state: dict) -> str:
     return f'<section class="card"><ul class="conc">{bullets}</ul>{table}</section>'
 
 
-def journal_section(cfg: dict) -> str:
-    df = Journal(cfg["journal"]["directory"]).load()
-    if df.empty:
-        return """
-<section class="card connect">
-  <div class="connect-head"><span class="cbadge">CONNEXION</span>
-    <h3 style="margin:0">Brancher le journal Tradovate</h3></div>
-  <p class="reason">Une fois connecté, vos trades demo remontent tout seuls chaque
-  matin : win rate, PnL cumulé, stats par killzone et derniers trades s'affichent ici.</p>
-  <ol class="steps">
-    <li><b>Activer l'API dans Tradovate</b> — compte demo → <i>Application Settings →
-      API Access</i> → générer une clé. Vous obtenez un <b>Client ID (cid)</b> et un
-      <b>Secret</b>. (L'API refuse le simple login : « app not registered ».)</li>
-    <li><b>Renseigner 4 variables</b> dans l'environnement cloud (Réglages Claude Code) :
-      <code>TRADOVATE_USERNAME</code>, <code>TRADOVATE_PASSWORD</code>,
-      <code>TRADOVATE_CID</code>, <code>TRADOVATE_SECRET</code>.</li>
-  </ol>
-  <p class="empty">Lecture seule (récupération des fills) — aucune prise de position
-  automatique, démo uniquement.</p>
-</section>"""
-    df = df.sort_values("exit_time").reset_index(drop=True)
-    pnl = df["pnl_usd"]
-    wins, losses = pnl[pnl > 0], pnl[pnl <= 0]
-    pf = wins.sum() / -losses.sum() if losses.sum() < 0 else float("inf")
-
-    def signed(v, fmt):
-        cls = "pos" if v > 0 else "neg"
-        return f'<span class="kval {cls}">{v:{fmt}}</span>'
-
-    kpis = f"""
-  <div class="kpis">
-    <div class="kpi"><span class="klab">Win rate</span><span class="kval">{len(wins) / len(df):.0%}</span><span class="ksub">{len(df)} trades</span></div>
-    <div class="kpi"><span class="klab">PnL total</span>{signed(pnl.sum(), "+,.0f")}<span class="ksub">USD (demo)</span></div>
-    <div class="kpi"><span class="klab">Profit factor</span><span class="kval">{pf:.2f}</span><span class="ksub">gains/pertes $</span></div>
-    <div class="kpi"><span class="klab">Trade moyen</span>{signed(pnl.mean(), "+,.0f")}<span class="ksub">meilleur {pnl.max():+,.0f} / pire {pnl.min():+,.0f}</span></div>
-  </div>""".replace(",", " ")
-
-    by_kz = df.groupby("killzone")["pnl_usd"]
-    kz_rows = "".join(
-        f'<tr><td>{kz}</td><td class="num">{len(g)}</td>'
-        f'<td class="num">{(g > 0).mean():.0%}</td>'
-        f'<td class="num">{g.sum():+,.0f} $</td></tr>'.replace(",", " ")
-        for kz, g in by_kz)
-    last_rows = "".join(
-        f'<tr><td class="num">{pd.Timestamp(t["exit_time"]):%d/%m %H:%M}</td>'
-        f'<td>{html.escape(str(t["symbol"]))}</td><td>{t["direction"]}</td>'
-        f'<td class="num" style="color:var(--{"bull" if t["pnl_usd"] > 0 else "bear"}-ink)">'
-        f'{t["pnl_usd"]:+,.0f} $</td></tr>'.replace(",", " ")
-        for _, t in df.tail(8).iloc[::-1].iterrows())
-
-    return f"""
-<section class="card">
-  {kpis}
-  <h3>PnL cumulé (USD, demo)</h3>
-  {equity_svg(df, "journal", value_col="pnl_usd", unit="$")}
-  <h3>Par killzone</h3>
-  <div class="scroll"><table class="fvg"><thead><tr><th></th><th>trades</th><th>WR</th>
-  <th>PnL</th></tr></thead><tbody>{kz_rows}</tbody></table></div>
-  <h3>Derniers trades</h3>
-  <div class="scroll"><table class="fvg"><thead><tr><th>sortie</th><th>symbole</th>
-  <th>sens</th><th>PnL</th></tr></thead><tbody>{last_rows}</tbody></table></div>
-  <p class="empty">Synchronisé automatiquement depuis Tradovate DEMO chaque matin
-  (fills reconstruits en round trips FIFO).</p>
-</section>"""
-
-
 def propfirm_section(cfg: dict, bt: dict) -> str:
     rules = cfg.get("propfirm", {})
     blocks = []
@@ -461,23 +393,9 @@ def propfirm_section(cfg: dict, bt: dict) -> str:
     return "".join(blocks) + note
 
 
-def _try_sync_journal(cfg: dict) -> None:
-    """Best-effort Tradovate DEMO journal sync; silent no-op without creds."""
-    import os
-    if not all(os.getenv(k) for k in ("TRADOVATE_USERNAME", "TRADOVATE_PASSWORD",
-                                      "TRADOVATE_CID", "TRADOVATE_SECRET")):
-        return
-    try:
-        from trading_os.forward.journal_sync import sync_journal
-        sync_journal(cfg)
-    except Exception:
-        pass
-
-
 def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     now = datetime.now(NY)
     day_kind, day_label = day_status(now)
-    _try_sync_journal(cfg)
 
     frames = {name: fetch_frames(name) for name in cfg["premarket"]["instruments"]}
     cards, asof, heros = [], None, []
@@ -509,7 +427,6 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
             bt[name] = None
     backtest_html = backtest_section(cfg, state, bt)
     insights_html = insights_section(variant_rows, state)
-    journal_html = journal_section(cfg)
     propfirm_html = propfirm_section(cfg, bt)
 
     try:
@@ -555,18 +472,6 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
                         f'{e.time_ny:%H:%M}</span> {html.escape(e.title)}</li>'
                         for e in week[:8])
         week_html = f'<h3>À venir cette semaine</h3><ul class="week">{items}</ul>'
-
-    stats = Journal(cfg["journal"]["directory"]).killzone_stats()
-    if stats.empty:
-        kz_stats_html = '<p class="empty">Journal vide — vos stats par killzone apparaîtront ici.</p>'
-    else:
-        rows = "".join(f'<tr><td>{kz}</td><td class="num">{int(r["trades"])}</td>'
-                       f'<td class="num">{r["win_rate"]:.0%}</td>'
-                       f'<td class="num">{r["avg_r"]:+.2f} R</td></tr>'
-                       for kz, r in stats.iterrows())
-        kz_stats_html = ('<div class="scroll"><table class="fvg"><thead><tr><th>killzone</th>'
-                         '<th>trades</th><th>WR</th><th>R moyen</th></tr></thead>'
-                         f'<tbody>{rows}</tbody></table></div>')
 
     checklist_html = "".join(
         f'<li><label><input type="checkbox" data-k="c{i}"><span>{html.escape(item)}</span></label></li>'
@@ -644,16 +549,6 @@ body {{ background:var(--bg); color:var(--ink); margin:0;
 .hval.warn {{ color:var(--warn-ink) }}
 .hsub {{ font-size:11px; color:var(--ink3); white-space:nowrap; overflow:hidden;
   text-overflow:ellipsis }}
-/* -- connect card -- */
-.card.connect {{ border-color:var(--accent) }}
-.connect-head {{ display:flex; align-items:center; gap:9px; margin-bottom:2px }}
-.cbadge {{ font-size:10px; letter-spacing:.14em; color:var(--accent-ink);
-  border:1px solid var(--accent); border-radius:4px; padding:2px 7px;
-  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
-ol.steps {{ margin:6px 0 4px; padding-left:20px; font-size:13px; color:var(--ink2) }}
-ol.steps li {{ padding:5px 0 5px 4px }}
-ol.steps code {{ background:var(--raised); border:1px solid var(--line); border-radius:4px;
-  padding:1px 5px; font-size:12px }}
 /* -- sections -- */
 .eyebrow {{ font-size:11px; letter-spacing:.18em; color:var(--ink3);
   text-transform:uppercase; margin:26px 2px 10px; }}
@@ -807,16 +702,11 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
   <div class="eyebrow">// Éval prop firm — simulation Lucid 50K Pro</div>
   {propfirm_html}
 
-  <div class="eyebrow">// Journal Tradovate DEMO — win rate &amp; PnL</div>
-  {journal_html}
-
   <div class="eyebrow">// Fenêtre de trading</div>
   <section class="card">
     <div class="kzline"><span class="pill {kz_pill}">NY AM</span>
       <span class="num">{kz["start"]} → {kz["end"]} (heure NY)</span></div>
     <p class="reason">{kz_note}</p>
-    <h3>Mes stats par killzone (forward test)</h3>
-    {kz_stats_html}
   </section>
 
   <div class="eyebrow">// Checklist avant chaque trade</div>
