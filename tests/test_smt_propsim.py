@@ -60,8 +60,18 @@ def test_propsim_passes_target():
     assert res.final_pnl > 0
 
 
-def test_propsim_fails_on_max_loss():
-    trades = _trades([-3000, -3000], [1, 2])
+def test_propsim_fails_on_daily_loss_limit():
+    # a single big losing day trips the Pro $1,200 intraday daily stop
+    trades = _trades([-3000], [1])
+    res = simulate(trades, ES_SPEC)
+    assert res.status == "echouee"
+    assert "Daily Loss Limit" in res.detail
+
+
+def test_propsim_fails_on_trailing_max_loss():
+    # small daily losses stay under the $1,200 daily cap but breach the $2,000
+    # EOD trailing MLL cumulatively (micro-scaled)
+    trades = _trades([-350] * 4, [1, 2, 3, 4])   # ~-725 $/jour en micros, sous le stop 1200
     res = simulate(trades, ES_SPEC)
     assert res.status == "echouee"
     assert "Max Loss Limit" in res.detail

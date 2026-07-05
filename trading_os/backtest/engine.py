@@ -55,6 +55,8 @@ class BacktestResult:
     skipped_ntz: int = 0
     skipped_position_busy: int = 0
     skipped_low_rating: int = 0
+    skipped_no_sweep: int = 0
+    skipped_no_pd: int = 0
 
 
 def _load_ntz_intervals(path: str, before_min: int, after_min: int) -> list[tuple]:
@@ -101,9 +103,14 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     target_cfg = icfg["target"]
     use_liquidity = target_cfg["mode"] == "liquidity"
     swing_strength = target_cfg["swing_strength"]
+    setup_cfg = icfg.get("setup", {})
+    require_sweep = setup_cfg.get("require_sweep", False)
+    sweep_lookback = setup_cfg.get("sweep_lookback", 40)
+    require_pd = setup_cfg.get("require_pd", False)
+    pd_lookback = setup_cfg.get("pd_lookback", 60)
     # Full swing list precomputed; lookahead is avoided at use time via the
-    # confirmation lag inside nearest_liquidity_target().
-    swings = find_swings(df, swing_strength) if use_liquidity else []
+    # confirmation lag inside nearest_liquidity_target() / the sweep check.
+    swings = find_swings(df, swing_strength) if (use_liquidity or require_sweep) else []
 
     tracker = FVGTracker(
         tick_size=tick,
@@ -132,10 +139,43 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     l_arr = df["low"].to_numpy(); c_arr = df["close"].to_numpy()
     times = df.index
 
+    def swept_liquidity(f: FVG) -> bool:
+        """A+ criterion: just before the FVG formed, price raided the most recent
+        opposing swing (short after a swing-high sweep, long after a swing-low
+        sweep) then reversed. No lookahead: the swing is confirmed before the raid,
+        and the sweep must occur inside the lookback window right before the FVG."""
+        win_lo = max(0, f.created_idx - sweep_lookback)
+        want_high = f.ifvg_direction == Direction.BEARISH   # short -> a high was raided
+        kind = "high" if want_high else "low"
+        # most recent swing of that kind confirmed before the window starts
+        prior = [s for s in swings if s.kind == kind
+                 and s.idx + swing_strength <= win_lo]
+        if not prior:
+            return False
+        s = max(prior, key=lambda s: s.idx)
+        seg_h = h_arr[win_lo:f.created_idx + 1]
+        seg_l = l_arr[win_lo:f.created_idx + 1]
+        # liquidity taken (wicked beyond the swing) inside the window
+        return seg_h.max() > s.price if want_high else seg_l.min() < s.price
+
+    def in_pd(f: FVG, entry: float) -> bool:
+        """Long only in the discount half, short only in the premium half of the
+        recent range (premium/discount, ICT)."""
+        lo = max(0, f.created_idx - pd_lookback)
+        hi_r = h_arr[lo:f.created_idx + 1].max()
+        lo_r = l_arr[lo:f.created_idx + 1].min()
+        if hi_r <= lo_r:
+            return True
+        mid = (hi_r + lo_r) / 2
+        return entry >= mid if f.ifvg_direction == Direction.BEARISH else entry <= mid
+
     def make_setup(f: FVG, idx: int,
                    rating: InversionRating | None = None) -> PendingSetup | None:
         if rating is not None and rating.total < min_rating:
             result.skipped_low_rating += 1
+            return None
+        if require_sweep and not swept_liquidity(f):
+            result.skipped_no_sweep += 1
             return None
         if f.ifvg_direction == Direction.BEARISH:
             edges = {"proximal": f.bottom, "midpoint": (f.top + f.bottom) / 2, "distal": f.top}
@@ -161,6 +201,9 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
                     return None
             else:
                 tgt = entry + target_cfg["fixed_rr"] * risk
+        if require_pd and not in_pd(f, entry):
+            result.skipped_no_pd += 1
+            return None
         return PendingSetup(f, f.ifvg_direction, entry, stop, tgt, risk / tick, rating)
 
     def close_position(pos: Position, ts, exit_price: float, reason: str):

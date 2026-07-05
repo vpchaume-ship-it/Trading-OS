@@ -48,6 +48,13 @@ ifvg:
   stop_buffer_ticks: 2       # buffer au-delà du bord opposé de la zone pour le stop
   max_retests_per_zone: 1    # nombre d'entrées autorisées par zone inversée
   allowed_killzones: ["ny_am"]   # conforme aux PDF : 9:30-11:30 NY uniquement
+  # Critères de contexte A+ (méthode Dodgy) — filtres de qualité du SETUP,
+  # pas seulement de la bougie d'inversion :
+  setup:
+    require_sweep: true      # une liquidité (swing opposé) doit être balayée avant le FVG
+    sweep_lookback: 40       # fenêtre (barres) où chercher le balayage avant le FVG
+    require_pd: true         # long en discount / short en premium de la range récente
+    pd_lookback: 60          # fenêtre (barres) pour la range premium/discount
   # Notation de la bougie d'inversion (PDF Candle Closure Ratings) :
   # force /4 + vitesse /3 + qualité RR /3 = /10 (10=A+, 9=A, 8=A-, 7=B+, 6=B, 5=B-, 3-4=C, <3=F).
   # Les setups sous ce seuil sont ignorés (backtest ET forward test).
@@ -103,15 +110,16 @@ journal:
   directory: "journal"
 
 # Simulation d'éval prop firm sur le backtest auto-réglé (indicatif).
-# Valeurs Lucid 50K Flex vérifiées en ligne — à re-vérifier avant toute éval réelle.
+# Valeurs Lucid 50K Pro vérifiées en ligne — à re-vérifier avant toute éval réelle.
 propfirm:
-  name: "Lucid 50K Flex"
+  name: "Lucid 50K Pro"
   start_balance: 50000
   profit_target: 3000
-  max_loss_limit: 2000          # trailing en fin de journée (EOD), intraday ignoré
+  max_loss_limit: 2000          # trailing fin de journée (EOD), suit le plus haut solde de clôture
+  daily_loss_limit: 1200        # stop journalier intraday (spécifique au Pro)
   lock_at_start: true           # le plancher se fige au solde initial une fois atteint
-  min_days: 2
-  consistency_pct: 50           # aucun jour > 50 % du profit total (phase éval)
+  min_days: 1                   # Pro : passable en 1 jour
+  consistency_pct: 0            # Pro : pas de règle de consistance en éval
   max_micros: 40                # 4 minis ES ou 40 micros
   risk_per_trade_usd: 200       # sizing simulé en micros
 

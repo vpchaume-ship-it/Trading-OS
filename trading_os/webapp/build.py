@@ -448,10 +448,13 @@ def propfirm_section(cfg: dict, bt: dict) -> str:
     if not blocks:
         return ('<section class="card"><p class="empty">Pas encore assez de trades '
                 'backtestés pour simuler l\'éval.</p></section>')
-    note = (f'<p class="empty">Règles simulées « {rules.get("name", "Lucid 50K Flex")} » : '
+    dll = rules.get("daily_loss_limit", 0)
+    dll_txt = f'stop journalier {dll:,.0f} $, ' if dll else ''
+    note = (f'<p class="empty">Règles simulées « {rules.get("name", "Lucid 50K Pro")} » : '
             f'objectif {rules.get("profit_target", 3000):,.0f} $, Max Loss Limit '
-            f'{rules.get("max_loss_limit", 2000):,.0f} $ en trailing EOD, minimum '
-            f'{rules.get("min_days", 2)} jours, consistance {rules.get("consistency_pct", 50)} %, '
+            f'{rules.get("max_loss_limit", 2000):,.0f} $ en trailing EOD, {dll_txt}'
+            f'minimum {rules.get("min_days", 1)} jour(s), '
+            f'{"sans règle de consistance" if not rules.get("consistency_pct") else "consistance " + str(rules["consistency_pct"]) + " %"}, '
             f'sizing ~{rules.get("risk_per_trade_usd", 200):,.0f} $ de risque/trade en micros. '
             'Simulation indicative sur le backtest auto-réglé — vérifiez toujours les règles '
             'officielles Lucid avant une éval réelle.</p>').replace(",", " ")
@@ -801,7 +804,7 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
   <div class="eyebrow">// Conclusions du backtest — mises à jour chaque matin</div>
   {insights_html}
 
-  <div class="eyebrow">// Éval prop firm — simulation Lucid 50K Flex</div>
+  <div class="eyebrow">// Éval prop firm — simulation Lucid 50K Pro</div>
   {propfirm_html}
 
   <div class="eyebrow">// Journal Tradovate DEMO — win rate &amp; PnL</div>

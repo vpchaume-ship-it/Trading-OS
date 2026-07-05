@@ -15,9 +15,9 @@ from pathlib import Path
 import pandas as pd
 
 from trading_os.core.timeutils import NY
-from trading_os.data.yahoo import clean_intraday, fetch
+from trading_os.data.yahoo import backfill_1m, clean_intraday, fetch
 
-FETCH_PLAN = [("1m", "7d", "1m", 1), ("5m", "60d", "5m", 5)]
+FETCH_PLAN = [("5m", "60d", "5m", 5)]     # le 1m est géré séparément (backfill 4 semaines)
 
 
 def load_accumulated(path: str | Path) -> pd.DataFrame | None:
@@ -36,21 +36,24 @@ def accumulate(instrument: str, directory: str | Path = "data") -> dict[str, tup
 
     Returns {interval: (path, n_total_bars)}.
     """
-    out: dict[str, tuple[Path, int]] = {}
-    for interval, range_, suffix, minutes in FETCH_PLAN:
-        path = Path(directory) / f"yahoo_{instrument}_{suffix}.csv"
-        fresh = clean_intraday(fetch(instrument, range_, interval), minutes)
+    def _merge_save(path: Path, fresh: pd.DataFrame, minutes: int) -> int:
         old = load_accumulated(path)
         merged = fresh if old is None else pd.concat([old, fresh])
         merged = merged[~merged.index.duplicated(keep="last")].sort_index()
-        # one-time cleanup of previously stored artifacts (misaligned quote rows)
-        merged = clean_intraday(merged, minutes)
+        merged = clean_intraday(merged, minutes)   # drop artifacts + forming bar
         path.parent.mkdir(parents=True, exist_ok=True)
-        # store timestamps in UTC ISO form for a stable round-trip
         to_save = merged.copy()
-        to_save.index = to_save.index.tz_convert("UTC")
+        to_save.index = to_save.index.tz_convert("UTC")   # stable round-trip
         to_save.to_csv(path)
-        out[interval] = (path, len(merged))
+        return len(merged)
+
+    out: dict[str, tuple[Path, int]] = {}
+    for interval, range_, suffix, minutes in FETCH_PLAN:
+        path = Path(directory) / f"yahoo_{instrument}_{suffix}.csv"
+        out[interval] = (path, _merge_save(path, fetch(instrument, range_, interval), minutes))
+    # 1m : backfill 4 semaines (Yahoo ~30 j max), fusionné dans l'historique cumulé
+    p1 = Path(directory) / f"yahoo_{instrument}_1m.csv"
+    out["1m"] = (p1, _merge_save(p1, backfill_1m(instrument, weeks=4), 1))
     return out
 
 

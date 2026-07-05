@@ -31,8 +31,8 @@ VARIANTS: list[tuple[str, dict]] = [
     ("Entrée milieu de zone", {"min_rating": 0, "retest_entry": "midpoint"}),
     ("Break-even à +1R", {"min_rating": 0, "exit_mode": "be"}),
     ("Trailing 1R sans cible", {"min_rating": 0, "exit_mode": "trail"}),
-    ("Midpoint + break-even", {"min_rating": 0, "retest_entry": "midpoint",
-                               "exit_mode": "be"}),
+    ("Sans sweep ni premium/discount", {"min_rating": 0, "no_sweep": True, "no_pd": True}),
+    ("Sweep + premium/discount", {"min_rating": 0}),
 ]
 
 
@@ -43,6 +43,10 @@ def apply_patch(cfg: dict, patch: dict) -> None:
             cfg["ifvg"]["target"]["mode"] = v
         elif k == "exit_mode":
             cfg["ifvg"].setdefault("exit", {})["mode"] = v
+        elif k == "no_sweep":
+            cfg["ifvg"].setdefault("setup", {})["require_sweep"] = not v
+        elif k == "no_pd":
+            cfg["ifvg"].setdefault("setup", {})["require_pd"] = not v
         else:
             cfg["ifvg"][k] = v
 

@@ -14,7 +14,8 @@ from trading_os.backtest.engine import run_backtest
 from trading_os.backtest.metrics import breakdown, summary
 from trading_os.data.accumulate import load_accumulated
 
-MIN_1M_BARS = 15_000   # ~2-3 semaines de séance : en dessous, le 5m est plus parlant
+MIN_1M_BARS = 5_000    # ~1 semaine de séance 1m — dès qu'on l'a, le 1m prime
+                       # (timeframe d'exécution fidèle à la méthode Dodgy)
 
 
 def dashboard_backtest(cfg: dict, instrument: str, directory: str = "data",
