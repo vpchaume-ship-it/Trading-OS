@@ -447,9 +447,23 @@ def propfirm_section(cfg: dict, bt: dict) -> str:
     return "".join(blocks) + note
 
 
+def _try_sync_journal(cfg: dict) -> None:
+    """Best-effort Tradovate DEMO journal sync; silent no-op without creds."""
+    import os
+    if not all(os.getenv(k) for k in ("TRADOVATE_USERNAME", "TRADOVATE_PASSWORD",
+                                      "TRADOVATE_CID", "TRADOVATE_SECRET")):
+        return
+    try:
+        from trading_os.forward.journal_sync import sync_journal
+        sync_journal(cfg)
+    except Exception:
+        pass
+
+
 def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     now = datetime.now(NY)
     day_kind, day_label = day_status(now)
+    _try_sync_journal(cfg)
 
     frames = {name: fetch_frames(name) for name in cfg["premarket"]["instruments"]}
     cards, asof = [], None
