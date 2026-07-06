@@ -74,7 +74,8 @@ ifvg:
     mode: "liquidity"        # liquidity / fixed_rr
     fixed_rr: 2.0            # RR pour le mode fixed_rr
     liquidity_min_rr: 2.0    # en mode liquidity : RR minimal exigé (cibles + larges = meilleur WR avec prise partielle)
-    swing_strength: 3        # nb de barres de chaque côté pour définir un swing (mode liquidity)
+    swing_strength: 5        # significance des swings (sweep + cibles). 5 ≈ balayage d'un
+                             # niveau significatif type PDH/PDL (méthode Dodgy) — validé en backtest.
 
 backtest:
   instrument: "ES"

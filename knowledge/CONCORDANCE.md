@@ -45,3 +45,25 @@ Analyse des trois documents de `knowledge/` face au code (mise à jour : 2026-07
 `Candle_Closure_Ratings.pdf` et `Dodgys_IFVG_Rating_System.pdf` sont des slides
 graphiques : l'extraction texte de l'indexeur y est pauvre. Leur contenu a été lu
 et intégré manuellement dans ce document et dans `core/rating.py`.
+
+## Étude de la méthode Dodgy (DodgysDD) — juillet 2026
+
+Recherche publique (tradezella, scribd, communauté). Modèle de Dodgy :
+- **NQ, session New York** uniquement, sur du 1 minute.
+- Entrée = **balayage de liquidité d'un niveau clé (PDH/PDL, swing majeur)** →
+  formation d'un **IFVG** (par mèche OU clôture) → entrée au retest.
+- Cible = liquidité opposée. Corrélation ES/NQ (SMT) en confluence.
+- « Trap » : le balayage piège la liquidité avant le vrai mouvement.
+
+Traduction dans le backtest (validée sur ~5 mois de NQ 1m profond) :
+- Le filtre `require_sweep` exige déjà un balayage avant le FVG. En rendant le
+  swing **plus significatif** (`swing_strength: 5` au lieu de 3, proxy du
+  niveau PDH/PDL), le backtest s'améliore nettement :
+  - sortie classique : 58 trades, **+1.71 R/trade, PF 3.07** (26 % WR)
+  - prise partielle : 58 trades, **36 % WR**, +0.77 R, PF 2.07
+- L'auto-réglage privilégie le win rate parmi les configs rentables → il
+  retient la prise partielle (36 % WR) pour NQ.
+
+Limite : reproduire son ~70 % de win rate reste hors de portée mécanique — sa
+sélection A+ (qualité du displacement, SMT, jugement du contexte) est
+discrétionnaire. Le backtest est fidèle à la *structure* du modèle, pas à son œil.
