@@ -491,28 +491,28 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     page = f"""<title>Trading OS — Prémarché</title>
 <style>
 :root {{
-  --bg:#101418; --surface:#1a2026; --raised:#232b33; --line:#2c363f;
-  --ink:#e8edf2; --ink2:#98a6b3; --ink3:#5f6d7a;
-  --bull:#1e9066; --bear:#da4560; --warn:#b37f26; --accent:#1e93a9;
-  --bull-ink:#5ecfa2; --bear-ink:#f2879a; --warn-ink:#dfb267; --accent-ink:#5cc6da;
+  --bg:#0a0e14; --surface:#121a24; --raised:#1a2430; --line:#25313f;
+  --ink:#e8eef6; --ink2:#8a99ab; --ink3:#556575;
+  --bull:#1fbf75; --bear:#f0453f; --warn:#e0a52e; --accent:#3d8bff;
+  --bull-ink:#2ee08c; --bear-ink:#ff6b64; --warn-ink:#f0bd54; --accent-ink:#69a8ff;
 }}
 @media (prefers-color-scheme: light) {{ :root {{
-  --bg:#f5f7f9; --surface:#ffffff; --raised:#eef2f5; --line:#dce3e9;
-  --ink:#16202a; --ink2:#5a6875; --ink3:#8a97a3;
-  --bull:#1f9d6b; --bear:#c93a52; --warn:#a8761f; --accent:#0e93ac;
-  --bull-ink:#177550; --bear-ink:#a92f44; --warn-ink:#865e18; --accent-ink:#0b7285;
+  --bg:#eef1f5; --surface:#ffffff; --raised:#e8edf2; --line:#d5dde6;
+  --ink:#0e1621; --ink2:#55636f; --ink3:#8592a0;
+  --bull:#0f9d63; --bear:#d63a3a; --warn:#9a6b12; --accent:#1667d6;
+  --bull-ink:#0b7a4d; --bear-ink:#bf2e2e; --warn-ink:#7c5510; --accent-ink:#1258bd;
 }} }}
 :root[data-theme="dark"] {{
-  --bg:#101418; --surface:#1a2026; --raised:#232b33; --line:#2c363f;
-  --ink:#e8edf2; --ink2:#98a6b3; --ink3:#5f6d7a;
-  --bull:#1e9066; --bear:#da4560; --warn:#b37f26; --accent:#1e93a9;
-  --bull-ink:#5ecfa2; --bear-ink:#f2879a; --warn-ink:#dfb267; --accent-ink:#5cc6da;
+  --bg:#0a0e14; --surface:#121a24; --raised:#1a2430; --line:#25313f;
+  --ink:#e8eef6; --ink2:#8a99ab; --ink3:#556575;
+  --bull:#1fbf75; --bear:#f0453f; --warn:#e0a52e; --accent:#3d8bff;
+  --bull-ink:#2ee08c; --bear-ink:#ff6b64; --warn-ink:#f0bd54; --accent-ink:#69a8ff;
 }}
 :root[data-theme="light"] {{
-  --bg:#f5f7f9; --surface:#ffffff; --raised:#eef2f5; --line:#dce3e9;
-  --ink:#16202a; --ink2:#5a6875; --ink3:#8a97a3;
-  --bull:#1f9d6b; --bear:#c93a52; --warn:#a8761f; --accent:#0e93ac;
-  --bull-ink:#177550; --bear-ink:#a92f44; --warn-ink:#865e18; --accent-ink:#0b7285;
+  --bg:#eef1f5; --surface:#ffffff; --raised:#e8edf2; --line:#d5dde6;
+  --ink:#0e1621; --ink2:#55636f; --ink3:#8592a0;
+  --bull:#0f9d63; --bear:#d63a3a; --warn:#9a6b12; --accent:#1667d6;
+  --bull-ink:#0b7a4d; --bear-ink:#bf2e2e; --warn-ink:#7c5510; --accent-ink:#1258bd;
 }}
 * {{ box-sizing:border-box }}
 body {{ background:var(--bg); color:var(--ink); margin:0;
@@ -521,6 +521,16 @@ body {{ background:var(--bg); color:var(--ink); margin:0;
   {{ font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace; }}
 .num {{ font-variant-numeric:tabular-nums }}
 .wrap {{ max-width:680px; margin:0 auto; padding:0 14px 48px }}
+/* -- PC : élargit et met les cartes appairées côte à côte -- */
+.grid2 {{ display:grid; gap:14px }}
+.grid2 > .card {{ margin-bottom:0 }}
+.grid2 > .empty {{ margin:2px 0 0 }}
+@media (min-width:860px) {{
+  .wrap {{ max-width:1080px; padding-bottom:56px }}
+  .grid2 {{ grid-template-columns:1fr 1fr }}
+  .grid2 > .empty {{ grid-column:1 / -1 }}
+  .hero {{ grid-template-columns:repeat(6,1fr) }}
+}}
 /* -- top bar -- */
 .top {{ position:sticky; top:0; z-index:5; background:var(--bg);
   border-bottom:1px solid var(--line); padding:10px 14px;
@@ -691,16 +701,16 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
   {week_html}
 
   <div class="eyebrow">// Biais &amp; niveaux — D · 4H · 1H</div>
-  {instruments_html}
+  <div class="grid2">{instruments_html}</div>
 
   <div class="eyebrow">// Backtest IFVG — stats évolutives (setups A/A+ uniquement)</div>
-  {backtest_html}
+  <div class="grid2">{backtest_html}</div>
 
   <div class="eyebrow">// Conclusions du backtest — mises à jour chaque matin</div>
   {insights_html}
 
   <div class="eyebrow">// Éval prop firm — simulation Lucid 50K Pro</div>
-  {propfirm_html}
+  <div class="grid2">{propfirm_html}</div>
 
   <div class="eyebrow">// Fenêtre de trading</div>
   <section class="card">
