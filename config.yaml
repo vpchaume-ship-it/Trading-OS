@@ -96,8 +96,8 @@ news:
   currency: "USD"
   impact: "High"
   no_trade_zone:
-    minutes_before: 30
-    minutes_after: 15
+    minutes_before: 10
+    minutes_after: 10
 
 forward:
   # GARDE-FOUS — le code refuse de fonctionner hors demo, quelle que soit cette config.
@@ -132,7 +132,7 @@ premarket:
   checklist:
     - "Le biais HTF est-il défini (daily/H4) et mon trade va-t-il dans son sens ?"
     - "Suis-je dans une killzone autorisée ?"
-    - "Y a-t-il un red folder à moins de 30 min ? Si oui : NO TRADE."
+    - "Y a-t-il un red folder à moins de 10 min ? Si oui : NO TRADE."
     - "Le FVG a-t-il été invalidé par une clôture franche (pas juste une mèche) ?"
     - "Mon stop est-il au-delà de la zone inversée, taille de position calculée AVANT l'entrée ?"
     - "Le RR vers la cible (liquidité opposée) est-il d'au moins 2:1 ?"

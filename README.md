@@ -109,4 +109,4 @@ concepts* extrait les passages concernés pour arbitrage.
 
 La carte de scénarios news est une aide qualitative, jamais une prédiction. La
 réaction initiale aux red folders est souvent piégeuse (judas swing). Respectez
-les no-trade-zones (30 min avant / 15 min après chaque red folder).
+les no-trade-zones (10 min avant / 10 min après chaque red folder).
