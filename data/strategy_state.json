@@ -1,5 +1,5 @@
 {
-  "chosen_at": "2026-07-05T20:16:59",
+  "chosen_at": "2026-07-06T07:52:54",
   "guards": {
     "min_trades": 10,
     "min_expectancy": 0.1,
@@ -12,9 +12,11 @@
       "reason": "aucune variante ne passe les garde-fous (≥10 trades, ≥+0.10 R/trade, PF ≥1.20) — collecte en cours"
     },
     "NQ": {
-      "variant": "Prudence — A/A+ uniquement (défaut)",
-      "patch": {},
-      "reason": "aucune variante ne passe les garde-fous (≥10 trades, ≥+0.10 R/trade, PF ≥1.20) — collecte en cours"
+      "variant": "Sans filtre de grade",
+      "patch": {
+        "min_rating": 0
+      },
+      "reason": "51 trades · +0.70 R/trade · PF 1.82 sur 1min"
     }
   }
 }

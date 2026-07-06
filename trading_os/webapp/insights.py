@@ -20,19 +20,12 @@ from trading_os.webapp.stats import MIN_1M_BARS
 
 # (nom affiché, patch appliqué sur cfg["ifvg"])
 VARIANTS: list[tuple[str, dict]] = [
+    # Grille resserrée aux variantes les plus décisives (temps de build borné
+    # sur l'historique profond). Chaque variante = 1 backtest complet.
     ("Config actuelle (A/A+ only)", {}),
     ("Sans filtre de grade", {"min_rating": 0}),
-    ("Grade ≥ A- (8/10)", {"min_rating": 8}),
-    # body exige open ET close au-delà : il faut désactiver wick_fill_kills sinon
-    # la mèche traversante tue le FVG avant que l'inversion "corps entier" n'arrive
-    ("Invalidation corps entier", {"min_rating": 0, "invalidation_mode": "body",
-                                   "wick_fill_kills": False}),
-    ("Cible RR fixe 2:1", {"min_rating": 0, "target_mode": "fixed_rr"}),
-    ("Entrée milieu de zone", {"min_rating": 0, "retest_entry": "midpoint"}),
-    ("Break-even à +1R", {"min_rating": 0, "exit_mode": "be"}),
     ("Trailing 1R sans cible", {"min_rating": 0, "exit_mode": "trail"}),
     ("Sans sweep ni premium/discount", {"min_rating": 0, "no_sweep": True, "no_pd": True}),
-    ("Sweep + premium/discount", {"min_rating": 0}),
 ]
 
 
@@ -51,19 +44,9 @@ def apply_patch(cfg: dict, patch: dict) -> None:
             cfg["ifvg"][k] = v
 
 
-def _load_df(instrument: str, directory: str = "data"):
-    from pathlib import Path
-    df_1m = load_accumulated(Path(directory) / f"yahoo_{instrument}_1m.csv")
-    df_5m = load_accumulated(Path(directory) / f"yahoo_{instrument}_5m.csv")
-    if df_1m is not None and len(df_1m) >= MIN_1M_BARS:
-        return df_1m, "1min"
-    if df_5m is not None and len(df_5m) >= 500:
-        return df_5m, "5min"
-    return None, None
-
-
 def run_variants(cfg: dict, instrument: str, directory: str = "data") -> list[dict]:
-    df, tf = _load_df(instrument, directory)
+    from trading_os.webapp.stats import select_backtest_df
+    df, tf, _ = select_backtest_df(instrument, directory)
     if df is None:
         return []
     rows = []

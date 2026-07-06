@@ -90,7 +90,8 @@ class FVGTracker:
     ifvg_max_age_bars: int = 120
     max_retests: int = 1
 
-    fvgs: list[FVG] = field(default_factory=list)
+    fvgs: list[FVG] = field(default_factory=list)          # append-only, full history
+    _active: list[FVG] = field(default_factory=list)       # pruned scan list (perf)
     _h1: float | None = None  # high of c1 (two bars ago)
     _l1: float | None = None
     _h2: float | None = None
@@ -110,22 +111,31 @@ class FVGTracker:
     def update(self, idx: int, time: pd.Timestamp, o: float, h: float,
                l: float, c: float) -> Iterator[InversionEvent | RetestEvent]:
         """Process one completed bar; yield events triggered by this bar."""
-        # 1) lifecycle of existing zones
-        for f in self.fvgs:
-            if f.status == FVGStatus.ACTIVE:
-                yield from self._update_active(f, idx, time, o, h, l, c)
-            elif f.status == FVGStatus.INVERTED:
-                yield from self._update_inverted(f, idx, time, o, h, l, c)
+        # 1) lifecycle of existing zones. Only ACTIVE/INVERTED zones are scanned
+        # (self._active); terminal ones drop out so the whole backtest stays O(n)
+        # instead of O(n²) on long 1m histories. self.fvgs keeps the full history.
+        if self._active:
+            survivors = []
+            for f in self._active:
+                if f.status == FVGStatus.ACTIVE:
+                    yield from self._update_active(f, idx, time, o, h, l, c)
+                elif f.status == FVGStatus.INVERTED:
+                    yield from self._update_inverted(f, idx, time, o, h, l, c)
+                if f.status in (FVGStatus.ACTIVE, FVGStatus.INVERTED):
+                    survivors.append(f)
+            self._active = survivors
 
         # 2) new FVG formation with this bar as c3
         if self._h1 is not None:
             min_size = self.min_gap_ticks * self.tick_size
+            new = None
             if l - self._h1 >= min_size:  # bullish gap: low(c3) above high(c1)
-                self.fvgs.append(FVG(Direction.BULLISH, idx, time,
-                                     bottom=self._h1, top=l))
+                new = FVG(Direction.BULLISH, idx, time, bottom=self._h1, top=l)
             elif self._l1 - h >= min_size:  # bearish gap
-                self.fvgs.append(FVG(Direction.BEARISH, idx, time,
-                                     bottom=h, top=self._l1))
+                new = FVG(Direction.BEARISH, idx, time, bottom=h, top=self._l1)
+            if new is not None:
+                self.fvgs.append(new)
+                self._active.append(new)
 
         # 3) shift the 3-candle window
         self._h1, self._l1 = self._h2, self._l2

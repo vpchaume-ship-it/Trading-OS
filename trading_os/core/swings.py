@@ -24,14 +24,24 @@ def find_swings(df: pd.DataFrame, strength: int = 3) -> list[Swing]:
     """
     highs, lows = df["high"].to_numpy(), df["low"].to_numpy()
     n = len(df)
+    w = 2 * strength + 1
+    if n < w:
+        return []
+    from numpy.lib.stride_tricks import sliding_window_view
+    hw = sliding_window_view(highs, w)      # rows i-strength..i+strength for center i
+    lw = sliding_window_view(lows, w)
+    idx = np.arange(strength, n - strength)
+    is_high = (highs[strength:n - strength] == hw.max(axis=1)) & \
+              ((hw == highs[strength:n - strength][:, None]).sum(axis=1) == 1)
+    is_low = (lows[strength:n - strength] == lw.min(axis=1)) & \
+             ((lw == lows[strength:n - strength][:, None]).sum(axis=1) == 1)
+    times = df.index
     out: list[Swing] = []
-    for i in range(strength, n - strength):
-        win_h = highs[i - strength: i + strength + 1]
-        win_l = lows[i - strength: i + strength + 1]
-        if highs[i] == win_h.max() and (win_h == highs[i]).sum() == 1:
-            out.append(Swing(i, df.index[i], highs[i], "high"))
-        if lows[i] == win_l.min() and (win_l == lows[i]).sum() == 1:
-            out.append(Swing(i, df.index[i], lows[i], "low"))
+    for i in idx[is_high]:
+        out.append(Swing(int(i), times[i], float(highs[i]), "high"))
+    for i in idx[is_low]:
+        out.append(Swing(int(i), times[i], float(lows[i]), "low"))
+    out.sort(key=lambda s: s.idx)
     return out
 
 

@@ -272,7 +272,7 @@ def backtest_section(cfg: dict, state: dict, bt: dict) -> str:
                           f'le dataset jour après jour.</p></section>')
             continue
         s = d["stats"]
-        meta = (f'{d["tf"]} · {d["n_bars"]:,} barres · '
+        meta = (f'{d.get("source", d["tf"])} · {d["n_bars"]:,} barres · '
                 f'{d["start"]:%d/%m/%Y} → {d["end"]:%d/%m/%Y}').replace(",", " ")
         if s["n_trades"] == 0:
             blocks.append(f'<section class="card"><header class="card-head">'

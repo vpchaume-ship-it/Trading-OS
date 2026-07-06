@@ -11,19 +11,17 @@ def row(variant, inst, n, exp, pf):
 def test_picks_best_defensible_variant():
     rows = [
         row("Sans filtre de grade", "NQ", 22, 1.51, 2.1),
-        row("Entrée milieu de zone", "NQ", 21, 1.88, 2.7),
-        row("Cible RR fixe 2:1", "NQ", 97, -0.20, 0.8),
+        row("Trailing 1R sans cible", "NQ", 21, 1.88, 2.7),
     ]
     sel = select_strategy(rows, "NQ")
-    assert sel["variant"] == "Entrée milieu de zone"
-    assert sel["patch"] == {"min_rating": 0, "retest_entry": "midpoint"}
+    assert sel["variant"] == "Trailing 1R sans cible"
+    assert sel["patch"] == {"min_rating": 0, "exit_mode": "trail"}
 
 
 def test_fallback_when_no_variant_qualifies():
     rows = [
-        row("Sans filtre de grade", "ES", 9, 0.16, 1.5),    # < 10 trades
-        row("Entrée milieu de zone", "ES", 11, -0.28, 0.7),  # espérance négative
-        row("Cible RR fixe 2:1", "ES", 68, 0.02, 1.05),      # PF trop faible
+        row("Sans filtre de grade", "ES", 9, 0.16, 1.5),         # < 10 trades
+        row("Trailing 1R sans cible", "ES", 11, -0.28, 0.7),     # espérance négative
     ]
     sel = select_strategy(rows, "ES")
     assert sel["variant"] == FALLBACK_NAME
