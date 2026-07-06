@@ -128,6 +128,10 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     )
     stop_buffer = icfg["stop_buffer_ticks"] * tick
     entry_mode = icfg["retest_entry"]
+    # "retest" = ordre limite au bord de la zone inversée (attend le retest) ;
+    # "inversion_close" = entrée au marché sur la clôture de la bougie qui inverse
+    # le FVG (méthode Dodgy, agressive), stop au-delà de cette bougie.
+    entry_timing = icfg.get("entry_timing", "retest")
     min_rating = icfg.get("min_rating", 0)
     exit_cfg = icfg.get("exit", {})
     exit_mode = exit_cfg.get("mode", "full")          # full | be | trail
@@ -184,8 +188,10 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         drift = c_arr[f.created_idx] - c_arr[j]
         return drift > 0 if f.ifvg_direction == Direction.BULLISH else drift < 0
 
-    def make_setup(f: FVG, idx: int,
-                   rating: InversionRating | None = None) -> PendingSetup | None:
+    def make_setup(f: FVG, idx: int, rating: InversionRating | None = None,
+                   inv_ohlc: tuple | None = None) -> PendingSetup | None:
+        """inv_ohlc = (o,h,l,c) of the inversion bar, given only for
+        entry_timing='inversion_close' (aggressive market entry at that close)."""
         if rating is not None and rating.total < min_rating:
             result.skipped_low_rating += 1
             return None
@@ -196,10 +202,14 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
             result.skipped_no_sweep += 1
             return None
         if f.ifvg_direction == Direction.BEARISH:
-            edges = {"proximal": f.bottom, "midpoint": (f.top + f.bottom) / 2, "distal": f.top}
-            entry = edges[entry_mode]
-            stop = f.top + stop_buffer
+            if inv_ohlc is not None:                 # enter at the inversion close
+                entry = inv_ohlc[3]; stop = inv_ohlc[1] + stop_buffer   # stop above inv high
+            else:
+                edges = {"proximal": f.bottom, "midpoint": (f.top + f.bottom) / 2, "distal": f.top}
+                entry = edges[entry_mode]; stop = f.top + stop_buffer
             risk = stop - entry
+            if risk <= 0:
+                return None
             if use_liquidity:
                 tgt = nearest_liquidity_target(swings, idx, swing_strength, entry, "bearish")
                 if tgt is None or (entry - tgt) / risk < target_cfg["liquidity_min_rr"]:
@@ -208,10 +218,14 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
             else:
                 tgt = entry - target_cfg["fixed_rr"] * risk
         else:
-            edges = {"proximal": f.top, "midpoint": (f.top + f.bottom) / 2, "distal": f.bottom}
-            entry = edges[entry_mode]
-            stop = f.bottom - stop_buffer
+            if inv_ohlc is not None:
+                entry = inv_ohlc[3]; stop = inv_ohlc[2] - stop_buffer   # stop below inv low
+            else:
+                edges = {"proximal": f.top, "midpoint": (f.top + f.bottom) / 2, "distal": f.bottom}
+                entry = edges[entry_mode]; stop = f.bottom - stop_buffer
             risk = entry - stop
+            if risk <= 0:
+                return None
             if use_liquidity:
                 tgt = nearest_liquidity_target(swings, idx, swing_strength, entry, "bullish")
                 if tgt is None or (tgt - entry) / risk < target_cfg["liquidity_min_rr"]:
@@ -304,9 +318,27 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         retested_now: set[int] = set()
         for ev in events:
             if isinstance(ev, InversionEvent):
-                stp = make_setup(ev.fvg, i, rate_inversion(ev.fvg, o, h, l, c))
-                if stp is not None:
-                    setups.append(stp)
+                rating = rate_inversion(ev.fvg, o, h, l, c)
+                if entry_timing == "inversion_close":
+                    # aggressive: enter at market on the inversion bar's close
+                    stp = make_setup(ev.fvg, i, rating, inv_ohlc=(o, h, l, c))
+                    if stp is None:
+                        continue
+                    if ts.time() >= eod_flat or not kz.in_any(ts, allowed_kz):
+                        continue
+                    in_zone_news = _in_ntz(ts, ntz)
+                    if respect_ntz and in_zone_news:
+                        result.skipped_ntz += 1
+                        continue
+                    if position is not None:
+                        result.skipped_position_busy += 1
+                        continue
+                    position = Position(stp, ts, i, kz.label(ts), in_zone_news,
+                                        cur_stop=stp.stop, best=stp.entry)
+                else:
+                    stp = make_setup(ev.fvg, i, rating)
+                    if stp is not None:
+                        setups.append(stp)
             else:  # RetestEvent — the tracker may flag the zone CONSUMED on the
                 retested_now.add(id(ev.fvg))  # very bar our limit order fills
 

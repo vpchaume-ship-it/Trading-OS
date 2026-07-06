@@ -22,11 +22,12 @@ from trading_os.webapp.stats import MIN_1M_BARS
 VARIANTS: list[tuple[str, dict]] = [
     # Grille resserrée aux variantes les plus décisives (temps de build borné
     # sur l'historique profond). Chaque variante = 1 backtest complet.
-    # Base = prise partielle +1R (scale, défaut). On compare aux alternatives.
-    ("Config actuelle (A/A+ only)", {}),
-    ("Prise partielle, tous grades", {"min_rating": 0}),
-    ("Sortie classique (full)", {"min_rating": 0, "exit_mode": "full"}),
-    ("Trailing 1R sans cible", {"min_rating": 0, "exit_mode": "trail"}),
+    # Base = entrée Dodgy (clôture d'inversion). On compare à l'entrée au retest.
+    ("Entrée inversion (A/A+)", {}),
+    ("Entrée inversion, tous grades", {"min_rating": 0}),
+    ("Entrée au retest", {"min_rating": 0, "entry_timing": "retest"}),
+    ("Retest + prise partielle", {"min_rating": 0, "entry_timing": "retest",
+                                  "exit_mode": "scale"}),
 ]
 
 

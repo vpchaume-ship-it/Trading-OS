@@ -11,17 +11,17 @@ def row(variant, inst, n, exp, pf, wr=0.35):
 def test_picks_highest_winrate_among_profitable():
     # both clear the guardrails; selection favours the higher win rate
     rows = [
-        row("Prise partielle, tous grades", "NQ", 42, 0.34, 1.65, wr=0.33),
-        row("Sortie classique (full)", "NQ", 42, 0.95, 2.13, wr=0.24),
+        row("Retest + prise partielle", "NQ", 42, 0.34, 1.65, wr=0.36),
+        row("Entrée au retest", "NQ", 42, 0.95, 2.13, wr=0.26),
     ]
     sel = select_strategy(rows, "NQ")
-    assert sel["variant"] == "Prise partielle, tous grades"
+    assert sel["variant"] == "Retest + prise partielle"
 
 
 def test_fallback_when_no_variant_qualifies():
     rows = [
-        row("Prise partielle, tous grades", "ES", 9, 0.16, 1.5),  # < 10 trades
-        row("Trailing 1R sans cible", "ES", 11, -0.28, 0.7),      # espérance négative
+        row("Entrée au retest", "ES", 9, 0.16, 1.5),                  # < 10 trades
+        row("Retest + prise partielle", "ES", 11, -0.28, 0.7),        # espérance négative
     ]
     sel = select_strategy(rows, "ES")
     assert sel["variant"] == FALLBACK_NAME
@@ -29,6 +29,6 @@ def test_fallback_when_no_variant_qualifies():
 
 
 def test_instruments_are_independent():
-    rows = [row("Trailing 1R sans cible", "NQ", 30, 1.0, 2.0)]
+    rows = [row("Entrée au retest", "NQ", 30, 1.0, 2.0)]
     assert select_strategy(rows, "ES")["variant"] == FALLBACK_NAME
-    assert select_strategy(rows, "NQ")["variant"] == "Trailing 1R sans cible"
+    assert select_strategy(rows, "NQ")["variant"] == "Entrée au retest"
