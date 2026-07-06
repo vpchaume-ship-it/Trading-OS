@@ -1,5 +1,5 @@
 {
-  "chosen_at": "2026-07-06T09:22:37",
+  "chosen_at": "2026-07-06T09:27:49",
   "guards": {
     "min_trades": 10,
     "min_expectancy": 0.1,
@@ -12,12 +12,11 @@
       "reason": "aucune variante ne passe les garde-fous (≥10 trades, ≥+0.10 R/trade, PF ≥1.20) — collecte en cours"
     },
     "NQ": {
-      "variant": "Sortie classique (full)",
+      "variant": "Prise partielle, tous grades",
       "patch": {
-        "min_rating": 0,
-        "exit_mode": "full"
+        "min_rating": 0
       },
-      "reason": "42 trades · +0.95 R/trade · PF 2.13 sur 1min"
+      "reason": "42 trades · WR 33% · +0.34 R/trade · PF 1.47"
     }
   }
 }

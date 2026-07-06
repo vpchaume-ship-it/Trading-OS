@@ -3,19 +3,19 @@
 from trading_os.webapp.insights import FALLBACK_NAME, select_strategy
 
 
-def row(variant, inst, n, exp, pf):
-    return {"variant": variant, "instrument": inst, "tf": "5min",
+def row(variant, inst, n, exp, pf, wr=0.35):
+    return {"variant": variant, "instrument": inst, "tf": "5min", "win_rate": wr,
             "n_trades": n, "expectancy_r": exp, "profit_factor": pf}
 
 
-def test_picks_best_defensible_variant():
+def test_picks_highest_winrate_among_profitable():
+    # both clear the guardrails; selection favours the higher win rate
     rows = [
-        row("Prise partielle, tous grades", "NQ", 22, 1.51, 2.1),
-        row("Trailing 1R sans cible", "NQ", 21, 1.88, 2.7),
+        row("Prise partielle, tous grades", "NQ", 42, 0.34, 1.65, wr=0.33),
+        row("Sortie classique (full)", "NQ", 42, 0.95, 2.13, wr=0.24),
     ]
     sel = select_strategy(rows, "NQ")
-    assert sel["variant"] == "Trailing 1R sans cible"
-    assert sel["patch"] == {"min_rating": 0, "exit_mode": "trail"}
+    assert sel["variant"] == "Prise partielle, tous grades"
 
 
 def test_fallback_when_no_variant_qualifies():

@@ -85,10 +85,13 @@ def select_strategy(rows: list[dict], instrument: str) -> dict:
                            f"(≥{GUARDS['min_trades']} trades, "
                            f"≥{GUARDS['min_expectancy']:+.2f} R/trade, "
                            f"PF ≥{GUARDS['min_pf']:.2f}) — collecte en cours")}
-    best = max(cand, key=lambda r: (r["expectancy_r"], r["profit_factor"]))
+    # Objectif utilisateur : le win rate le plus élevé qui reste rentable
+    # (les garde-fous ci-dessus garantissent déjà la rentabilité). Départage
+    # par l'espérance puis le profit factor.
+    best = max(cand, key=lambda r: (r["win_rate"], r["expectancy_r"], r["profit_factor"]))
     return {"variant": best["variant"], "patch": PATCHES[best["variant"]],
-            "reason": (f"{best['n_trades']} trades · {best['expectancy_r']:+.2f} R/trade "
-                       f"· PF {best['profit_factor']:.2f} sur {best['tf']}")}
+            "reason": (f"{best['n_trades']} trades · WR {best['win_rate']:.0%} · "
+                       f"{best['expectancy_r']:+.2f} R/trade · PF {best['profit_factor']:.2f}")}
 
 
 def save_state(state: dict, path: str = STATE_PATH) -> None:
