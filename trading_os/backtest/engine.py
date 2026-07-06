@@ -42,6 +42,8 @@ class Position:
     in_ntz: bool
     cur_stop: float = 0.0    # dynamic stop (be/trail modes move it)
     best: float = 0.0        # most favorable price reached (completed bars)
+    banked_r: float = 0.0    # R already locked by a partial (scale-out)
+    frac: float = 1.0        # remaining position fraction after scaling
 
 
 @dataclass
@@ -57,6 +59,7 @@ class BacktestResult:
     skipped_low_rating: int = 0
     skipped_no_sweep: int = 0
     skipped_no_pd: int = 0
+    skipped_no_bias: int = 0
 
 
 def _load_ntz_intervals(path: str, before_min: int, after_min: int) -> list[tuple]:
@@ -108,6 +111,8 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     sweep_lookback = setup_cfg.get("sweep_lookback", 40)
     require_pd = setup_cfg.get("require_pd", False)
     pd_lookback = setup_cfg.get("pd_lookback", 60)
+    require_bias = setup_cfg.get("require_bias", False)
+    bias_lookback = setup_cfg.get("bias_lookback", 90)
     # Full swing list precomputed; lookahead is avoided at use time via the
     # confirmation lag inside nearest_liquidity_target() / the sweep check.
     swings = find_swings(df, swing_strength) if (use_liquidity or require_sweep) else []
@@ -169,10 +174,23 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         mid = (hi_r + lo_r) / 2
         return entry >= mid if f.ifvg_direction == Direction.BEARISH else entry <= mid
 
+    def bias_aligned(f: FVG) -> bool:
+        """Trade only with the higher-timeframe drift (Daily Bias PDF): a long
+        (bullish IFVG) needs price above where it was bias_lookback bars ago, a
+        short needs it below. Uses only bars up to the inversion -> no lookahead."""
+        j = f.created_idx - bias_lookback
+        if j < 0:
+            return False
+        drift = c_arr[f.created_idx] - c_arr[j]
+        return drift > 0 if f.ifvg_direction == Direction.BULLISH else drift < 0
+
     def make_setup(f: FVG, idx: int,
                    rating: InversionRating | None = None) -> PendingSetup | None:
         if rating is not None and rating.total < min_rating:
             result.skipped_low_rating += 1
+            return None
+        if require_bias and not bias_aligned(f):
+            result.skipped_no_bias += 1
             return None
         if require_sweep and not swept_liquidity(f):
             result.skipped_no_sweep += 1
@@ -210,14 +228,17 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         s = pos.setup
         sign = 1 if s.direction == Direction.BULLISH else -1
         gained_ticks = sign * (exit_price - s.entry) / tick
-        pnl = gained_ticks * tick_value - commission_rt
         risk_usd = s.risk_ticks * tick_value
+        # remaining fraction's result + any R already banked by a partial
+        leg_r = gained_ticks / s.risk_ticks
+        net_r = pos.banked_r + pos.frac * leg_r
+        pnl = net_r * risk_usd - commission_rt
         rows.append({
             "entry_time": pos.entry_time, "exit_time": ts,
             "direction": s.direction.value, "entry": s.entry, "stop": s.stop,
             "target": s.target, "exit_price": exit_price, "exit_reason": reason,
             "risk_ticks": s.risk_ticks,
-            "gross_r": gained_ticks / s.risk_ticks,
+            "gross_r": pos.banked_r + pos.frac * leg_r,
             "net_r": pnl / risk_usd,
             "pnl_usd": round(pnl, 2),
             "killzone": pos.killzone or "hors_killzone",
@@ -253,6 +274,11 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
                         position.cur_stop = max(position.cur_stop, s.entry)
                     elif exit_mode == "trail" and position.best >= s.entry + trail_rr * risk:
                         position.cur_stop = max(position.cur_stop, position.best - trail_rr * risk)
+                    elif (exit_mode == "scale" and position.frac == 1.0
+                          and position.best >= s.entry + be_trigger * risk):
+                        position.banked_r = 0.5 * be_trigger   # bank half at +1R
+                        position.frac = 0.5
+                        position.cur_stop = max(position.cur_stop, s.entry)  # runner -> BE
             else:
                 if h >= position.cur_stop:
                     close_position(position, ts, position.cur_stop + slip_stop, "stop")
@@ -265,6 +291,11 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
                         position.cur_stop = min(position.cur_stop, s.entry)
                     elif exit_mode == "trail" and position.best <= s.entry - trail_rr * risk:
                         position.cur_stop = min(position.cur_stop, position.best + trail_rr * risk)
+                    elif (exit_mode == "scale" and position.frac == 1.0
+                          and position.best <= s.entry - be_trigger * risk):
+                        position.banked_r = 0.5 * be_trigger
+                        position.frac = 0.5
+                        position.cur_stop = min(position.cur_stop, s.entry)
             if position is not None and ts.time() >= eod_flat:
                 close_position(position, ts, c, "eod_flat"); position = None
 

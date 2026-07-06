@@ -22,10 +22,11 @@ from trading_os.webapp.stats import MIN_1M_BARS
 VARIANTS: list[tuple[str, dict]] = [
     # Grille resserrée aux variantes les plus décisives (temps de build borné
     # sur l'historique profond). Chaque variante = 1 backtest complet.
+    # Base = prise partielle +1R (scale, défaut). On compare aux alternatives.
     ("Config actuelle (A/A+ only)", {}),
-    ("Sans filtre de grade", {"min_rating": 0}),
+    ("Prise partielle, tous grades", {"min_rating": 0}),
+    ("Sortie classique (full)", {"min_rating": 0, "exit_mode": "full"}),
     ("Trailing 1R sans cible", {"min_rating": 0, "exit_mode": "trail"}),
-    ("Sans sweep ni premium/discount", {"min_rating": 0, "no_sweep": True, "no_pd": True}),
 ]
 
 
@@ -34,6 +35,8 @@ def apply_patch(cfg: dict, patch: dict) -> None:
     for k, v in patch.items():
         if k == "target_mode":
             cfg["ifvg"]["target"]["mode"] = v
+        elif k == "liq_min_rr":
+            cfg["ifvg"]["target"]["liquidity_min_rr"] = v
         elif k == "exit_mode":
             cfg["ifvg"].setdefault("exit", {})["mode"] = v
         elif k == "no_sweep":

@@ -62,17 +62,18 @@ ifvg:
   min_rating: 9
   # Gestion de sortie : full = stop/cible classiques ; be = stop ramené à
   # l'entrée une fois +1R atteint ; trail = stop suiveur à 1R derrière
-  # l'extrême favorable (la cible est ignorée, on laisse courir).
+  # l'extrême favorable ; scale = prise partielle (moitié à +1R, reste au
+  # break-even jusqu'à la cible) — mécanique de Dodgy, remonte le win rate.
   exit:
-    mode: "full"             # full / be / trail
-    be_trigger_rr: 1.0       # déclenchement du break-even (en R)
+    mode: "scale"            # full / be / trail / scale
+    be_trigger_rr: 1.0       # +1R : déclenche BE (be/trail) ou la prise partielle (scale)
     trail_rr: 1.0            # distance du stop suiveur (en R)
   target:
     # Conforme à vos PDF : la cible est la prochaine liquidité (swing confirmé
     # le plus proche dans le sens du trade). "fixed_rr" reste dispo pour comparer.
     mode: "liquidity"        # liquidity / fixed_rr
     fixed_rr: 2.0            # RR pour le mode fixed_rr
-    liquidity_min_rr: 1.5    # en mode liquidity : RR minimal exigé, sinon setup ignoré
+    liquidity_min_rr: 2.0    # en mode liquidity : RR minimal exigé (cibles + larges = meilleur WR avec prise partielle)
     swing_strength: 3        # nb de barres de chaque côté pour définir un swing (mode liquidity)
 
 backtest:

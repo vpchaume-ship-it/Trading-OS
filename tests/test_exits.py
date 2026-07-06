@@ -46,6 +46,21 @@ def test_trail_locks_profit_and_ignores_target():
     assert t["gross_r"] == pytest.approx((100 - 98.75) / 2.0)
 
 
+def test_scale_banks_half_then_runs_to_be():
+    # reaches +1R (98.00), banks 0.5R on half, runner stopped at BE next bar
+    bars = SETUP_BARS + [
+        (99.2, 100.3, 99.1, 99.9),   # fill short at 100
+        (99.9, 100.0, 97.9, 98.5),   # best 97.9 <= 98 (+1R) -> bank 0.5R, runner BE
+        (98.5, 100.6, 98.4, 100.4),  # comes back up, hits BE stop at 100.00
+    ]
+    df = make_df(bars, start="2024-03-04 09:30")
+    res = run_backtest(df, exit_cfg("scale"), "ES")
+    t = res.trades.iloc[0]
+    # net ≈ banked 0.5R on half + ~0 on runner (minus a little slippage/commission)
+    assert 0.35 < t["net_r"] < 0.5
+    assert t["net_r"] > 0        # a scale trade that gave back the runner is still a WIN
+
+
 def test_full_mode_unchanged():
     bars = SETUP_BARS + [(99.2, 100.3, 99.1, 99.9), (99.9, 100.0, 95.9, 96.2)]
     df = make_df(bars, start="2024-03-04 09:30")

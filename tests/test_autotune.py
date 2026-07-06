@@ -10,7 +10,7 @@ def row(variant, inst, n, exp, pf):
 
 def test_picks_best_defensible_variant():
     rows = [
-        row("Sans filtre de grade", "NQ", 22, 1.51, 2.1),
+        row("Prise partielle, tous grades", "NQ", 22, 1.51, 2.1),
         row("Trailing 1R sans cible", "NQ", 21, 1.88, 2.7),
     ]
     sel = select_strategy(rows, "NQ")
@@ -20,8 +20,8 @@ def test_picks_best_defensible_variant():
 
 def test_fallback_when_no_variant_qualifies():
     rows = [
-        row("Sans filtre de grade", "ES", 9, 0.16, 1.5),         # < 10 trades
-        row("Trailing 1R sans cible", "ES", 11, -0.28, 0.7),     # espérance négative
+        row("Prise partielle, tous grades", "ES", 9, 0.16, 1.5),  # < 10 trades
+        row("Trailing 1R sans cible", "ES", 11, -0.28, 0.7),      # espérance négative
     ]
     sel = select_strategy(rows, "ES")
     assert sel["variant"] == FALLBACK_NAME
@@ -29,6 +29,6 @@ def test_fallback_when_no_variant_qualifies():
 
 
 def test_instruments_are_independent():
-    rows = [row("Sans filtre de grade", "NQ", 30, 1.0, 2.0)]
+    rows = [row("Trailing 1R sans cible", "NQ", 30, 1.0, 2.0)]
     assert select_strategy(rows, "ES")["variant"] == FALLBACK_NAME
-    assert select_strategy(rows, "NQ")["variant"] == "Sans filtre de grade"
+    assert select_strategy(rows, "NQ")["variant"] == "Trailing 1R sans cible"
