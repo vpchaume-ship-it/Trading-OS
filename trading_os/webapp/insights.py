@@ -20,14 +20,17 @@ from trading_os.webapp.stats import MIN_1M_BARS
 
 # (nom affiché, patch appliqué sur cfg["ifvg"])
 VARIANTS: list[tuple[str, dict]] = [
-    # Grille resserrée aux variantes les plus décisives (temps de build borné
-    # sur l'historique profond). Chaque variante = 1 backtest complet.
-    # Base = entrée Dodgy (clôture d'inversion). On compare à l'entrée au retest.
-    ("Entrée inversion (A/A+)", {}),
-    ("Entrée inversion, tous grades", {"min_rating": 0}),
-    ("Entrée au retest", {"min_rating": 0, "entry_timing": "retest"}),
-    ("Retest + prise partielle", {"min_rating": 0, "entry_timing": "retest",
-                                  "exit_mode": "scale"}),
+    # Modèle utilisateur = sweep de niveau de session + IFVG + V-shape (dans la
+    # config de base). La grille explore le TIMING d'entrée et la GESTION de sortie
+    # par-dessus ce modèle. Chaque variante = 1 backtest complet.
+    #   base = entrée Dodgy (clôture d'inversion), sortie pleine.
+    ("Sweep session + V-shape (clôture inversion)", {}),
+    ("Sweep session + V-shape (retest, cible pleine)", {"entry_timing": "retest"}),
+    ("Sweep session + V-shape (retest + prise partielle)",
+     {"entry_timing": "retest", "exit_mode": "scale"}),
+    # témoin : le même modèle SANS le filtre V-shape, pour mesurer son apport.
+    ("Sweep session sans V-shape (retest + partielle)",
+     {"entry_timing": "retest", "exit_mode": "scale", "no_vshape": True}),
 ]
 
 
@@ -42,6 +45,8 @@ def apply_patch(cfg: dict, patch: dict) -> None:
             cfg["ifvg"].setdefault("exit", {})["mode"] = v
         elif k == "no_sweep":
             cfg["ifvg"].setdefault("setup", {})["require_sweep"] = not v
+        elif k == "no_vshape":
+            cfg["ifvg"].setdefault("setup", {})["require_vshape"] = not v
         elif k == "no_pd":
             cfg["ifvg"].setdefault("setup", {})["require_pd"] = not v
         else:

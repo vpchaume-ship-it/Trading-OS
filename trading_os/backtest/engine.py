@@ -60,6 +60,8 @@ class BacktestResult:
     skipped_no_sweep: int = 0
     skipped_no_pd: int = 0
     skipped_no_bias: int = 0
+    skipped_no_session_sweep: int = 0
+    skipped_no_vshape: int = 0
 
 
 def _load_ntz_intervals(path: str, before_min: int, after_min: int) -> list[tuple]:
@@ -113,6 +115,31 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     pd_lookback = setup_cfg.get("pd_lookback", 60)
     require_bias = setup_cfg.get("require_bias", False)
     bias_lookback = setup_cfg.get("bias_lookback", 90)
+    sweep_mode = setup_cfg.get("sweep_mode", "swing")   # swing | session
+    require_vshape = setup_cfg.get("require_vshape", False)
+    vshape_max_bars = setup_cfg.get("vshape_max_bars", 8)
+    vshape_min_move_ticks = setup_cfg.get("vshape_min_move_ticks", 20)
+
+    # Previous-session liquidity levels per bar (for sweep_mode="session"):
+    # prior day's high/low (PDH/PDL) + today's overnight high/low (00:00 -> killzone
+    # start = Asia+London). Complete before the NY killzone -> no lookahead.
+    pdh_arr = pdl_arr = onh_arr = onl_arr = None
+    if sweep_mode == "session":
+        import numpy as _np
+        kz_start = min(parse_hhmm(z["start"]) for z in cfg["killzones"].values())
+        dts = df.index
+        dates = _np.array([d.date() for d in dts])
+        day_hi = df.groupby(dates)["high"].max()
+        day_lo = df.groupby(dates)["low"].min()
+        on_mask = _np.array([t < kz_start for t in dts.time])
+        on_hi = df["high"][on_mask].groupby(dates[on_mask]).max()
+        on_lo = df["low"][on_mask].groupby(dates[on_mask]).min()
+        uniq = list(day_hi.index)
+        prev = {d: uniq[k - 1] for k, d in enumerate(uniq) if k > 0}
+        pdh_arr = _np.array([day_hi.get(prev.get(d), _np.nan) for d in dates])
+        pdl_arr = _np.array([day_lo.get(prev.get(d), _np.nan) for d in dates])
+        onh_arr = _np.array([on_hi.get(d, _np.nan) for d in dates])
+        onl_arr = _np.array([on_lo.get(d, _np.nan) for d in dates])
     # Full swing list precomputed; lookahead is avoided at use time via the
     # confirmation lag inside nearest_liquidity_target() / the sweep check.
     swings = find_swings(df, swing_strength) if (use_liquidity or require_sweep) else []
@@ -167,6 +194,42 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         # liquidity taken (wicked beyond the swing) inside the window
         return seg_h.max() > s.price if want_high else seg_l.min() < s.price
 
+    def swept_session_level(f: FVG) -> bool:
+        """User's model: the sweep must take a PREVIOUS-SESSION level, not just any
+        swing. For a short (bearish IFVG) price must have wicked above the prior
+        day's high (PDH) or today's overnight high within the lookback window right
+        before the FVG; for a long, below PDL or the overnight low. No lookahead:
+        PDH/PDL are yesterday's, the overnight extremes are complete before the NY
+        killzone, and the raid must sit inside the pre-FVG window."""
+        import numpy as _np
+        win_lo = max(0, f.created_idx - sweep_lookback)
+        want_high = f.ifvg_direction == Direction.BEARISH
+        if want_high:
+            levels = [pdh_arr[f.created_idx], onh_arr[f.created_idx]]
+            seg = h_arr[win_lo:f.created_idx + 1]
+            return any((not _np.isnan(lv)) and seg.max() > lv for lv in levels)
+        levels = [pdl_arr[f.created_idx], onl_arr[f.created_idx]]
+        seg = l_arr[win_lo:f.created_idx + 1]
+        return any((not _np.isnan(lv)) and seg.min() < lv for lv in levels)
+
+    def v_shape(f: FVG) -> bool:
+        """User's model: a sharp V-shape reversal into the inversion, not a slow
+        grind. From the swept extreme (the pivot within the lookback window) to the
+        inversion bar the counter-move must cover >= vshape_min_move_ticks within
+        <= vshape_max_bars. Measured on completed bars up to the inversion -> no
+        lookahead."""
+        inv = f.inverted_idx if f.inverted_idx is not None else f.created_idx
+        win_lo = max(0, inv - (sweep_lookback + vshape_max_bars))
+        want_high = f.ifvg_direction == Direction.BEARISH   # short: swept a high, fell
+        if want_high:
+            pivot = win_lo + int(h_arr[win_lo:inv + 1].argmax())   # extreme high
+            move_ticks = (h_arr[pivot] - c_arr[inv]) / tick
+        else:
+            pivot = win_lo + int(l_arr[win_lo:inv + 1].argmin())   # extreme low
+            move_ticks = (c_arr[inv] - l_arr[pivot]) / tick
+        bars = inv - pivot
+        return 0 < bars <= vshape_max_bars and move_ticks >= vshape_min_move_ticks
+
     def in_pd(f: FVG, entry: float) -> bool:
         """Long only in the discount half, short only in the premium half of the
         recent range (premium/discount, ICT)."""
@@ -198,8 +261,16 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         if require_bias and not bias_aligned(f):
             result.skipped_no_bias += 1
             return None
-        if require_sweep and not swept_liquidity(f):
-            result.skipped_no_sweep += 1
+        if require_sweep:
+            if sweep_mode == "session":
+                if not swept_session_level(f):
+                    result.skipped_no_session_sweep += 1
+                    return None
+            elif not swept_liquidity(f):
+                result.skipped_no_sweep += 1
+                return None
+        if require_vshape and not v_shape(f):
+            result.skipped_no_vshape += 1
             return None
         if f.ifvg_direction == Direction.BEARISH:
             if inv_ohlc is not None:                 # enter at the inversion close

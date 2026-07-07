@@ -54,15 +54,30 @@ ifvg:
   # Critères de contexte A+ (méthode Dodgy) — filtres de qualité du SETUP,
   # pas seulement de la bougie d'inversion :
   setup:
-    require_sweep: true      # une liquidité (swing opposé) doit être balayée avant le FVG
+    require_sweep: true      # une liquidité doit être balayée avant le FVG
+    # Modèle utilisateur = « sweep de previous sessions levels + IFVG + V-shape ».
+    #   sweep_mode: session = le balayage doit prendre un NIVEAU DE SESSION précédente
+    #     (PDH/PDL de la veille OU high/low overnight Asie+Londres), pas un swing quelconque.
+    #     "swing" = ancien mode (balayage d'un swing significatif).
+    sweep_mode: "session"    # session | swing
     sweep_lookback: 40       # fenêtre (barres) où chercher le balayage avant le FVG
+    # V-shape : renversement franc depuis l'extrême balayé jusqu'à l'inversion
+    # (≥ vshape_min_move_ticks en ≤ vshape_max_bars). Ce filtre de contexte remplace
+    # la note de bougie comme critère de qualité (min_rating passé à 0). Backtest NQ :
+    # il fait passer le win rate de 32 % à 47 % (voir CONCORDANCE.md).
+    require_vshape: true
+    vshape_max_bars: 8       # le V doit se former en ≤ N barres
+    vshape_min_move_ticks: 20  # amplitude minimale du renversement (ticks)
     require_pd: true         # long en discount / short en premium de la range récente
     pd_lookback: 60          # fenêtre (barres) pour la range premium/discount
   # Notation de la bougie d'inversion (PDF Candle Closure Ratings) :
   # force /4 + vitesse /3 + qualité RR /3 = /10 (10=A+, 9=A, 8=A-, 7=B+, 6=B, 5=B-, 3-4=C, <3=F).
   # Les setups sous ce seuil sont ignorés (backtest ET forward test).
-  # DÉCISION UTILISATEUR : A et A+ uniquement -> 9.
-  min_rating: 9
+  # La qualité du setup vient désormais du contexte (sweep de niveau de session
+  # + V-shape ci-dessous), pas de la note de bougie -> seuil à 0. La note reste
+  # calculée et affichée par trade. (Ancienne décision A/A+ -> 9 remplacée par
+  # le modèle utilisateur sweep+IFVG+V-shape, plus discriminant en backtest.)
+  min_rating: 0
   # Gestion de sortie : full = stop/cible classiques ; be = stop ramené à
   # l'entrée une fois +1R atteint ; trail = stop suiveur à 1R derrière
   # l'extrême favorable ; scale = prise partielle (moitié à +1R, reste au

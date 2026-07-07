@@ -8,20 +8,24 @@ def row(variant, inst, n, exp, pf, wr=0.35):
             "n_trades": n, "expectancy_r": exp, "profit_factor": pf}
 
 
+RETEST = "Sweep session + V-shape (retest, cible pleine)"
+SCALE = "Sweep session + V-shape (retest + prise partielle)"
+
+
 def test_picks_highest_winrate_among_profitable():
     # both clear the guardrails; selection favours the higher win rate
     rows = [
-        row("Retest + prise partielle", "NQ", 42, 0.34, 1.65, wr=0.36),
-        row("Entrée au retest", "NQ", 42, 0.95, 2.13, wr=0.26),
+        row(SCALE, "NQ", 42, 0.34, 1.65, wr=0.47),
+        row(RETEST, "NQ", 42, 0.95, 2.13, wr=0.33),
     ]
     sel = select_strategy(rows, "NQ")
-    assert sel["variant"] == "Retest + prise partielle"
+    assert sel["variant"] == SCALE
 
 
 def test_fallback_when_no_variant_qualifies():
     rows = [
-        row("Entrée au retest", "ES", 9, 0.16, 1.5),                  # < 10 trades
-        row("Retest + prise partielle", "ES", 11, -0.28, 0.7),        # espérance négative
+        row(RETEST, "ES", 9, 0.16, 1.5),                  # < 10 trades
+        row(SCALE, "ES", 11, -0.28, 0.7),                 # espérance négative
     ]
     sel = select_strategy(rows, "ES")
     assert sel["variant"] == FALLBACK_NAME
@@ -29,6 +33,6 @@ def test_fallback_when_no_variant_qualifies():
 
 
 def test_instruments_are_independent():
-    rows = [row("Entrée au retest", "NQ", 30, 1.0, 2.0)]
+    rows = [row(RETEST, "NQ", 30, 1.0, 2.0)]
     assert select_strategy(rows, "ES")["variant"] == FALLBACK_NAME
-    assert select_strategy(rows, "NQ")["variant"] == "Entrée au retest"
+    assert select_strategy(rows, "NQ")["variant"] == RETEST
