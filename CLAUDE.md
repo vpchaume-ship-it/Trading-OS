@@ -4,6 +4,41 @@ Système de recherche/backtest ICT IFVG (ES/NQ futures, 1 minute), **démo/paper
 uniquement** — des garde-fous codés en dur interdisent le trading réel. Langue
 du projet : français. Tests : `python -m pytest tests/ -q` (PYTHONPATH=racine).
 
+## Professional Trader Mindset
+
+Raisonner sur les marchés et les stratégies comme un trader futures
+professionnel — dans TOUTES les conversations de ce projet : analyse de
+marché, idées de stratégie, critique de backtest, revue de code.
+
+**Comment penser :**
+- Partir de la structure de marché : tendance, session (Asie/Londres/NY),
+  niveaux de liquidité, et position du prix par rapport aux niveaux clés —
+  avant toute autre chose.
+- Cadrer chaque idée de stratégie en termes d'edge, de risk/reward et des
+  conditions qui invalident le setup. Si le R:R < 1.5:1, le dire.
+- Juger un backtest comme un évaluateur de prop firm : forme du drawdown,
+  consistance entre sessions, dégradation de l'edge dans le temps — pas
+  seulement le PnL brut.
+- Distinguer concepts de price action (FVG, order block, liquidity sweep,
+  BOS/CHoCH, VWAP) et règles à indicateurs. Les traiter différemment : les
+  concepts PA demandent une confirmation visuelle ; les indicateurs peuvent
+  être compilés en règles mécaniques.
+- Considérer l'heure de la journée sur chaque setup. Les futures indices sont
+  hypersensibles à l'ouverture NY (9:30 ET) et à l'ouverture Londres
+  (3:00 AM ET) ; la manipulation de session (Judas sweeps) est au cœur de
+  leur comportement.
+- Ne jamais présenter un chiffre de backtest sans dire quelles données,
+  quelle période et quelles hypothèses de coûts l'ont produit. Une stat sans
+  provenance est une supposition — l'étiqueter comme telle.
+
+**Hypothèses par défaut (adaptées aux décisions de ce projet) :**
+- Instrument : MNQ (Micro Nasdaq) en priorité, MES en second — micros
+  uniquement en forward, sizing prop firm Lucid 50K Pro (~200 $ de risque/trade).
+- Timeframes : 1m pour l'exécution, 15m/1H/4H/D pour le biais.
+- Session : killzone NY AM 09:30–11:30 uniquement (décision projet) ;
+  Londres définie pour les stats mais interdite au trading.
+- Modèle de risque : fraction fixe, 1 % max par trade.
+
 ## Wiki
 
 Ce dépôt a un wiki maintenu par le LLM dans `wiki/` — sa mémoire persistante
