@@ -12,6 +12,7 @@ updated: 2026-07-09
 - [[log]] — journal chronologique append-only de tout ce qui se passe.
 - [[hot]] — état courant AUTO-GÉNÉRÉ (script `update_hot.py`). Ne jamais éditer à la main.
 - [[lessons]] — synthèse transversale des leçons apprises.
+- [[fiche-route-pc|Fiche de route PC]] — plan d'installation/densification Obsidian ; déclencheur « je suis sur mon PC ».
 - [[Failed Ideas/ledger|Failed Ideas]] — tableau des idées abandonnées + raison. **À lire avant tout travail.**
 
 ## Expériences (backtests / variantes de stratégie)
