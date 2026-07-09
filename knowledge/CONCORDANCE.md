@@ -67,3 +67,17 @@ Traduction dans le backtest (validée sur ~5 mois de NQ 1m profond) :
 Limite : reproduire son ~70 % de win rate reste hors de portée mécanique — sa
 sélection A+ (qualité du displacement, SMT, jugement du contexte) est
 discrétionnaire. Le backtest est fidèle à la *structure* du modèle, pas à son œil.
+
+## Modèle utilisateur (2026-07-07) — sweep session + IFVG + V-shape
+
+Définition donnée par l'utilisateur : « sweep de previous sessions levels +
+ifvg + v shape ». Codé dans `backtest/engine.py` (`swept_session_level`,
+`v_shape`) et adopté comme défaut :
+- **Sweep de session** : raid du PDH/PDL de la veille ou du high/low overnight
+  (pas un swing quelconque) — `sweep_mode: session`.
+- **V-shape** : renversement ≥ 20 ticks en ≤ 8 barres depuis l'extrême balayé.
+- Résultat NQ (120k barres 1m) : **WR 32 % → 47 %** (+1.58 R, PF 3.64, retest
+  + prise partielle). Le rating de bougie passe de filtre (min_rating 9) à
+  simple information affichée (min_rating 0) : le contexte discrimine mieux.
+
+Suivi détaillé : `wiki/` (pages experiences/ et concepts/), maintenu par le LLM.
