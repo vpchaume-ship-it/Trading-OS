@@ -3,7 +3,7 @@
 # État courant — 2026-07-09
 
 ## Stratégie auto-réglée
-- Auto-réglage du 2026-07-09T20:41:17
+- Auto-réglage du 2026-07-09T20:48:10
 - **ES** : Prudence — A/A+ uniquement (défaut) — aucune variante ne passe les garde-fous (≥10 trades, ≥+0.10 R/trade, PF ≥1.20) — collecte en cours
 - **NQ** : Sweep session + V-shape (retest + prise partielle) — 30 trades · WR 43% · +0.91 R/trade · PF 2.45
 
@@ -16,6 +16,7 @@ Entrées récentes du journal :
 - [2026-07-13] decision | Ajout du « Professional Trader Mindset » dans CLAUDE.md (règles de raisonnement trader pro, défauts adaptés : MNQ, 1m/HTF, NY AM, 1 % risque) | actif à chaque session
 - [2026-07-13] ingest | Vidéo TikTok « second brain Claude+Obsidian » (graphe dense auto-alimenté) analysée image par image | fiche de route PC créée (journal auto-généré = multiplicateur de nœuds à coût token nul)
 - [2026-07-13] experience | Dashboard backtest rendu réellement évolutif : historique d'auto-réglage persistant (strategy_history.csv, delta vs veille), check de dégradation d'edge (1ʳᵉ vs 2ᵉ moitié), segment DD max sur l'equity | 71 tests verts ; premier snapshot : NQ 43 % WR +0.91R PF 2.45 (30 trades), ES négatif en fallback
+- [2026-07-13] bugfix | Débordement horizontal mobile (150 px) : .card-head flex sans wrap + min-width:auto sur .price/.card, aggravé par les noms de variantes longs | vérifié à 390/360 px via Chromium headless : 0 px
 
 ## Next Actions
 <!-- next-actions:start -->

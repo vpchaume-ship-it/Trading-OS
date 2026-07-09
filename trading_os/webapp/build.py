@@ -633,10 +633,10 @@ body {{ background:var(--bg); color:var(--ink); margin:0;
 .eyebrow {{ font-size:11px; letter-spacing:.18em; color:var(--ink3);
   text-transform:uppercase; margin:26px 2px 10px; }}
 .card {{ background:var(--surface); border:1px solid var(--line); border-radius:10px;
-  padding:14px 16px; margin-bottom:14px; }}
-.card-head {{ display:flex; align-items:baseline; gap:12px; }}
+  padding:14px 16px; margin-bottom:14px; min-width:0; }}
+.card-head {{ display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; }}
 .card-head h2 {{ font-size:19px; margin:0; letter-spacing:.06em }}
-.price {{ color:var(--ink2); font-size:15px }}
+.price {{ color:var(--ink2); font-size:15px; min-width:0; overflow-wrap:anywhere }}
 .pill {{ margin-left:auto; font-size:11.5px; letter-spacing:.08em; padding:3px 9px;
   border-radius:999px; border:1px solid; }}
 .pill.bull {{ color:var(--bull-ink); border-color:var(--bull); background:color-mix(in srgb, var(--bull) 14%, transparent) }}
@@ -739,6 +739,7 @@ ul.check span {{ font-size:14px }}
   color:var(--ink); pointer-events:none; white-space:nowrap;
   font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
 .autotune {{ font-size:12.5px; color:var(--accent-ink); margin:8px 0 2px;
+  overflow-wrap:anywhere;
   font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
 .eq .ddline {{ stroke:var(--bear, #e5484d); stroke-width:1.5; stroke-dasharray:4 3; opacity:.8 }}
 .eq .ddlab {{ fill:var(--bear, #e5484d); font-size:10.5px;
