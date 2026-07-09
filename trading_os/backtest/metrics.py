@@ -41,6 +41,29 @@ def _max_streak(mask: pd.Series) -> int:
     return best
 
 
+def stability(trades: pd.DataFrame) -> dict | None:
+    """Edge degradation check (prop-firm evaluator view): compare the first and
+    second halves of the trade sequence. Returns None below 8 trades (halves
+    too thin to mean anything)."""
+    if len(trades) < 8:
+        return None
+    mid = len(trades) // 2
+    a, b = trades["net_r"].iloc[:mid], trades["net_r"].iloc[mid:]
+    h = lambda s: {"n": len(s), "win_rate": float((s > 0).mean()),
+                   "expectancy_r": float(s.mean())}
+    first, second = h(a), h(b)
+    d = second["expectancy_r"] - first["expectancy_r"]
+    if second["expectancy_r"] <= 0 < first["expectancy_r"]:
+        verdict = "degrade"          # l'edge a disparu sur la période récente
+    elif d < -0.25:
+        verdict = "faiblit"
+    elif d > 0.25:
+        verdict = "renforce"
+    else:
+        verdict = "stable"
+    return {"first": first, "second": second, "verdict": verdict}
+
+
 def breakdown(trades: pd.DataFrame, by: str) -> pd.DataFrame:
     """Stats grouped by a column (killzone, weekday, in_ntz, direction...)."""
     if trades.empty or by not in trades.columns:

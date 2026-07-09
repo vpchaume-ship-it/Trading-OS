@@ -111,6 +111,50 @@ def save_state(state: dict, path: str = STATE_PATH) -> None:
     p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+HISTORY_PATH = "data/strategy_history.csv"
+
+
+def append_history(state: dict, bt: dict, path: str = HISTORY_PATH) -> None:
+    """One row per instrument per build: the auto-tuned choice and its stats.
+    This is what lets the dashboard SHOW the self-evolution over time.
+    Idempotent per day (a rebuild the same day replaces that day's rows)."""
+    from datetime import date
+    from pathlib import Path
+    today = date.today().isoformat()
+    rows = []
+    for inst, sel in state.items():
+        d = (bt or {}).get(inst) or {}
+        s = d.get("stats") or {}
+        rows.append({"date": today, "instrument": inst,
+                     "variant": sel.get("variant", "?"),
+                     "n_trades": s.get("n_trades", 0),
+                     "win_rate": round(s.get("win_rate", 0.0), 4),
+                     "expectancy_r": round(s.get("expectancy_r", 0.0), 4),
+                     "profit_factor": round(min(s.get("profit_factor", 0.0), 99.0), 4),
+                     "total_r": round(s.get("total_r", 0.0), 2)})
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    if p.exists():
+        hist = pd.read_csv(p, dtype={"date": str})
+        hist = hist[hist["date"] != today]                 # rebuild same day
+        hist = pd.concat([hist, pd.DataFrame(rows)], ignore_index=True)
+    else:
+        hist = pd.DataFrame(rows)
+    hist.to_csv(p, index=False)
+
+
+def load_history(path: str = HISTORY_PATH) -> pd.DataFrame | None:
+    from pathlib import Path
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        h = pd.read_csv(p, dtype={"date": str})
+        return h if not h.empty else None
+    except Exception:
+        return None
+
+
 def load_state(path: str = STATE_PATH) -> dict | None:
     import json
     from pathlib import Path

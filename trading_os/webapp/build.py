@@ -239,6 +239,22 @@ def equity_svg(trades, uid: str, value_col: str = "net_r", unit: str = "R") -> s
 
     line = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
     area = f"{xs[0]:.1f},{y0:.1f} " + line + f" {xs[-1]:.1f},{y0:.1f}"
+    # max-drawdown segment (peak -> trough), the shape a prop-firm evaluator reads first
+    dd_mark = ""
+    peak_i = trough_i = cur_peak_i = 0
+    run_peak, worst = cum[0], 0.0
+    for i, v in enumerate(cum):
+        if v > run_peak:
+            run_peak, cur_peak_i = v, i
+        if v - run_peak < worst:
+            worst = v - run_peak
+            trough_i, peak_i = i, cur_peak_i
+    if worst < -1e-9 and trough_i > peak_i:
+        dd_mark = (f'<line x1="{xs[peak_i]:.1f}" y1="{ys[peak_i]:.1f}" '
+                   f'x2="{xs[trough_i]:.1f}" y2="{ys[trough_i]:.1f}" class="ddline"/>'
+                   f'<text x="{(xs[peak_i] + xs[trough_i]) / 2:.1f}" '
+                   f'y="{ys[trough_i] + 14:.1f}" class="ddlab" text-anchor="middle">'
+                   f'DD max {worst:.1f} {unit}</text>')
     first = pd.Timestamp(trades.iloc[0]["exit_time"])
     last = pd.Timestamp(trades.iloc[-1]["exit_time"])
     pts = [[round(x, 1), round(y, 1), m] for x, y, m in zip(xs, ys, pts_meta)]
@@ -250,6 +266,7 @@ def equity_svg(trades, uid: str, value_col: str = "net_r", unit: str = "R") -> s
     <line x1="{L}" y1="{y0:.1f}" x2="{W - R}" y2="{y0:.1f}" class="zero"/>
     <polygon points="{area}" class="area"/>
     <polyline points="{line}" class="curve"/>
+    {dd_mark}
     <circle cx="{xs[-1]:.1f}" cy="{ys[-1]:.1f}" r="4" class="enddot"/>
     <text x="{xs[-1] - 6:.1f}" y="{ys[-1] - 9:.1f}" class="endlab">{cum[-1]:+.1f} {unit}</text>
     <text x="{L}" y="{H - 8}" class="ax" text-anchor="start">{first:%d/%m}</text>
@@ -258,6 +275,52 @@ def equity_svg(trades, uid: str, value_col: str = "net_r", unit: str = "R") -> s
   </svg>
   <div class="tip" style="display:none"></div>
 </div>"""
+
+
+def stability_line(trades) -> str:
+    """Edge first-half vs second-half — the degradation check."""
+    from trading_os.backtest.metrics import stability
+    st = stability(trades)
+    if st is None:
+        return ""
+    meta = {"stable": ("bull", "EDGE STABLE"), "renforce": ("bull", "EDGE EN RENFORCEMENT"),
+            "faiblit": ("warn", "EDGE EN BAISSE"), "degrade": ("bear", "EDGE DÉGRADÉ RÉCEMMENT")}
+    cls, lab = meta[st["verdict"]]
+    f, s = st["first"], st["second"]
+    return (f'<p class="stab"><span class="pill {cls}">{lab}</span> '
+            f'1ʳᵉ moitié : WR {f["win_rate"]:.0%} · {f["expectancy_r"]:+.2f} R — '
+            f'2ᵉ moitié : WR {s["win_rate"]:.0%} · {s["expectancy_r"]:+.2f} R '
+            f'({f["n"]}+{s["n"]} trades)</p>')
+
+
+def evolution_block(name: str) -> str:
+    """How the self-tuning evolved across builds (from strategy_history.csv)."""
+    from trading_os.webapp.insights import load_history
+    h = load_history()
+    if h is None:
+        return ""
+    h = h[h["instrument"] == name].tail(10)
+    if h.empty:
+        return ""
+    delta = ""
+    if len(h) >= 2:
+        cur, prev = h.iloc[-1], h.iloc[-2]
+        dw = cur["win_rate"] - prev["win_rate"]
+        de = cur["expectancy_r"] - prev["expectancy_r"]
+        arrow = lambda v: "▲" if v > 0.005 else ("▼" if v < -0.005 else "◆")
+        changed = ("" if cur["variant"] == prev["variant"]
+                   else ' · <strong>réglage changé</strong>')
+        delta = (f'<p class="evold">vs build précédent : WR {arrow(dw)} {dw:+.0%} · '
+                 f'espérance {arrow(de)} {de:+.2f} R{changed}</p>')
+    rows = "".join(
+        f'<tr><td>{r["date"][5:]}</td><td class="vname">{html.escape(str(r["variant"]))[:34]}</td>'
+        f'<td class="num">{int(r["n_trades"])}</td><td class="num">{r["win_rate"]:.0%}</td>'
+        f'<td class="num">{r["expectancy_r"]:+.2f}</td></tr>'
+        for _, r in h.iloc[::-1].iterrows())
+    return (f'<h3>Évolution du réglage auto</h3>{delta}'
+            f'<div class="scroll"><table class="fvg"><thead><tr><th>build</th>'
+            f'<th>variante</th><th>trades</th><th>WR</th><th>R/trade</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table></div>')
 
 
 def backtest_section(cfg: dict, state: dict, bt: dict) -> str:
@@ -315,9 +378,11 @@ def backtest_section(cfg: dict, state: dict, bt: dict) -> str:
 <section class="card">
   <header class="card-head"><h2>{name}</h2><span class="price">{meta}</span></header>
   {auto_line}
+  {stability_line(d["trades"])}
   {kpis}
   <h3>Equity (R cumulés, coûts inclus)</h3>
   {equity_svg(d["trades"], name)}
+  {evolution_block(name)}
   {tables}
 </section>""")
     note = ('<p class="empty">Backtest réel (moteur IFVG, fenêtre 9:30–11:30, coûts '
@@ -425,6 +490,11 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
             bt[name] = dashboard_backtest(cfg, name, patch=state[name]["patch"])
         except Exception:
             bt[name] = None
+    try:
+        from trading_os.webapp.insights import append_history
+        append_history(state, bt)      # trace l'évolution de l'auto-réglage
+    except Exception:
+        pass
     backtest_html = backtest_section(cfg, state, bt)
     insights_html = insights_section(variant_rows, state)
     propfirm_html = propfirm_section(cfg, bt)
@@ -670,6 +740,14 @@ ul.check span {{ font-size:14px }}
   font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
 .autotune {{ font-size:12.5px; color:var(--accent-ink); margin:8px 0 2px;
   font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
+.eq .ddline {{ stroke:var(--bear, #e5484d); stroke-width:1.5; stroke-dasharray:4 3; opacity:.8 }}
+.eq .ddlab {{ fill:var(--bear, #e5484d); font-size:10.5px;
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
+.stab {{ font-size:12.5px; color:var(--ink2); margin:6px 0 2px; display:flex;
+  flex-wrap:wrap; align-items:center; gap:8px;
+  font-variant-numeric:tabular-nums }}
+.evold {{ font-size:12.5px; color:var(--ink2); margin:2px 0 8px;
+  font-variant-numeric:tabular-nums }}
 /* -- conclusions -- */
 ul.conc {{ list-style:none; padding:0; margin:0; font-size:13.5px }}
 ul.conc li {{ padding:8px 0 8px 18px; border-bottom:1px solid var(--line); position:relative }}
