@@ -1,5 +1,5 @@
 {
-  "chosen_at": "2026-07-06T12:22:16",
+  "chosen_at": "2026-07-07T13:22:40",
   "guards": {
     "min_trades": 10,
     "min_expectancy": 0.1,
@@ -12,13 +12,12 @@
       "reason": "aucune variante ne passe les garde-fous (≥10 trades, ≥+0.10 R/trade, PF ≥1.20) — collecte en cours"
     },
     "NQ": {
-      "variant": "Retest + prise partielle",
+      "variant": "Sweep session + V-shape (retest + prise partielle)",
       "patch": {
-        "min_rating": 0,
         "entry_timing": "retest",
         "exit_mode": "scale"
       },
-      "reason": "54 trades · WR 31% · +0.37 R/trade · PF 1.48"
+      "reason": "30 trades · WR 43% · +0.91 R/trade · PF 2.45"
     }
   }
 }
