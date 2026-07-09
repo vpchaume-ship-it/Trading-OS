@@ -29,6 +29,7 @@ updated: 2026-07-09
 
 ## Recherche (sources externes ingérées)
 - [[research/methode-dodgy|Méthode Dodgy (DodgysDD)]] — étude publique de son modèle NQ.
+- [[research/sources-news-huss|Sources de news (@huss.trades)]] — 4 sources vidéo → fil macro RSS + météo du risque VIX/or/DXY.
 - [[research/pdfs-ict|PDFs ICT du projet]] — Daily Bias, Candle Closure Ratings, IFVG Rating System (voir `knowledge/CONCORDANCE.md`).
 
 ## Référence (routeurs — liens seulement, jamais de contenu)

@@ -491,7 +491,36 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
         hero_tiles += (f'<div class="htile"><span class="hlab">{h["name"]} · biais jour</span>'
                        f'<span class="hval {c}">{g} {short[h["bias"]]}</span>'
                        f'<span class="hsub num">{px(h["price"])}</span></div>')
+    # météo du risque (VIX/or/DXY) — équivalent lite de la carte Glint
+    try:
+        from trading_os.premarket.risk import risk_weather
+        rw = risk_weather()
+    except Exception:
+        rw = None
+    if rw is not None:
+        rmeta = {"risk_on": ("bull", "RISK-ON"), "neutre": ("warn", "NEUTRE"),
+                 "risk_off": ("bear", "RISK-OFF")}[rw.verdict]
+        hero_tiles += (f'<div class="htile"><span class="hlab">Météo du risque</span>'
+                       f'<span class="hval {rmeta[0]}">{rmeta[1]}</span>'
+                       f'<span class="hsub num">VIX {rw.vix:.1f} ({rw.vix_chg:+.1f})</span></div>')
     hero_html = f'<div class="hero">{hero_tiles}</div>'
+
+    # fil macro 24 h (proxy gratuit des fils type Walter Bloomberg / FinancialJuice)
+    try:
+        from trading_os.news.headlines import fetch_macro_headlines
+        heads = fetch_macro_headlines()
+    except Exception:
+        heads = []
+    macro_html = ""
+    if heads:
+        items = "".join(
+            f'<li><span class="hsrc">{html.escape(h.source[:22])}</span> '
+            f'{html.escape(h.title)}</li>' for h in heads)
+        rw_line = (f'<p class="empty">Météo du risque : {html.escape(rw.detail)}</p>'
+                   if rw is not None else "")
+        macro_html = (f'<div class="eyebrow">// Fil macro — dernières 24 h '
+                      f'(hors calendrier)</div><section class="card">'
+                      f'<ul class="mfeed">{items}</ul>{rw_line}</section>')
 
     week_html = ""
     if week:
@@ -706,6 +735,13 @@ ul.check span {{ font-size:14px }}
   font-variant-numeric:tabular-nums }}
 .evold {{ font-size:12.5px; color:var(--ink2); margin:2px 0 8px;
   font-variant-numeric:tabular-nums }}
+/* -- fil macro -- */
+ul.mfeed {{ list-style:none; padding:0; margin:0; font-size:13.5px }}
+ul.mfeed li {{ padding:7px 0; border-bottom:1px solid var(--line); overflow-wrap:anywhere }}
+ul.mfeed li:last-child {{ border-bottom:none }}
+.hsrc {{ color:var(--accent-ink); font-size:11px; letter-spacing:.08em;
+  text-transform:uppercase; margin-right:6px;
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace }}
 /* -- conclusions -- */
 ul.conc {{ list-style:none; padding:0; margin:0; font-size:13.5px }}
 ul.conc li {{ padding:8px 0 8px 18px; border-bottom:1px solid var(--line); position:relative }}
@@ -734,6 +770,7 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
 
   <div class="eyebrow">// Red folders USD — aujourd'hui</div>
   {news_html}
+  {macro_html}
   {week_html}
 
   <div class="eyebrow">// Biais &amp; niveaux — D · 4H · 1H</div>
