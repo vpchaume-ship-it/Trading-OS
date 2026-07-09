@@ -28,7 +28,6 @@ from trading_os.premarket.bias import daily_bias
 from trading_os.premarket.mtf_bias import day_status, instrument_matrix
 from trading_os.webapp.insights import (conclusions, run_variants, save_state,
                                         select_strategy)
-from trading_os.webapp.propsim import simulate
 from trading_os.webapp.stats import dashboard_backtest
 
 FR_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -417,47 +416,6 @@ def insights_section(rows: list[dict], state: dict) -> str:
     return f'<section class="card"><ul class="conc">{bullets}</ul>{table}</section>'
 
 
-def propfirm_section(cfg: dict, bt: dict) -> str:
-    rules = cfg.get("propfirm", {})
-    blocks = []
-    for name, d in bt.items():
-        if not d or d["trades"] is None or d["trades"].empty:
-            continue
-        sim = simulate(d["trades"], cfg["instruments"][name], rules)
-        if sim is None:
-            continue
-        cls, glyph, lab = {"reussie": ("bull", "✓", "ÉVAL RÉUSSIE"),
-                           "echouee": ("bear", "✗", "ÉVAL ÉCHOUÉE"),
-                           "en_cours": ("warn", "…", "EN COURS")}[sim.status]
-        blocks.append(f"""
-<section class="card">
-  <header class="card-head"><h2>{name}</h2>
-    <span class="price">{sim.days} jour(s) · ~{sim.avg_micros:.0f} micros/trade</span>
-    <span class="pill {cls}">{glyph} {lab}</span></header>
-  <p class="reason">{html.escape(sim.detail)}.</p>
-  <div class="kpis">
-    <div class="kpi"><span class="klab">PnL simulé</span><span class="kval {'pos' if sim.final_pnl > 0 else 'neg'}">{sim.final_pnl:+,.0f}</span><span class="ksub">USD</span></div>
-    <div class="kpi"><span class="klab">Meilleur jour</span><span class="kval">{sim.best_day:+,.0f}</span><span class="ksub">consistance {'OK' if sim.consistency_ok else 'NON'}</span></div>
-    <div class="kpi"><span class="klab">Pire jour</span><span class="kval">{sim.worst_day:+,.0f}</span><span class="ksub">USD</span></div>
-    <div class="kpi"><span class="klab">Trades</span><span class="kval">{sim.trades}</span><span class="ksub">{d["tf"]}</span></div>
-  </div>
-</section>""".replace(",", " "))
-    if not blocks:
-        return ('<section class="card"><p class="empty">Pas encore assez de trades '
-                'backtestés pour simuler l\'éval.</p></section>')
-    dll = rules.get("daily_loss_limit", 0)
-    dll_txt = f'stop journalier {dll:,.0f} $, ' if dll else ''
-    note = (f'<p class="empty">Règles simulées « {rules.get("name", "Lucid 50K Pro")} » : '
-            f'objectif {rules.get("profit_target", 3000):,.0f} $, Max Loss Limit '
-            f'{rules.get("max_loss_limit", 2000):,.0f} $ en trailing EOD, {dll_txt}'
-            f'minimum {rules.get("min_days", 1)} jour(s), '
-            f'{"sans règle de consistance" if not rules.get("consistency_pct") else "consistance " + str(rules["consistency_pct"]) + " %"}, '
-            f'sizing ~{rules.get("risk_per_trade_usd", 200):,.0f} $ de risque/trade en micros. '
-            'Simulation indicative sur le backtest auto-réglé — vérifiez toujours les règles '
-            'officielles Lucid avant une éval réelle.</p>').replace(",", " ")
-    return "".join(blocks) + note
-
-
 def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     now = datetime.now(NY)
     day_kind, day_label = day_status(now)
@@ -497,7 +455,6 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
         pass
     backtest_html = backtest_section(cfg, state, bt)
     insights_html = insights_section(variant_rows, state)
-    propfirm_html = propfirm_section(cfg, bt)
 
     try:
         events = fetch_red_folders(cfg)
@@ -788,8 +745,6 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
   <div class="eyebrow">// Conclusions du backtest — mises à jour chaque matin</div>
   {insights_html}
 
-  <div class="eyebrow">// Éval prop firm — simulation Lucid 50K Pro</div>
-  <div class="grid2">{propfirm_html}</div>
 
   <div class="eyebrow">// Fenêtre de trading</div>
   <section class="card">
