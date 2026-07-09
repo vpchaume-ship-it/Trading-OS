@@ -1,0 +1,3 @@
+date,instrument,variant,n_trades,win_rate,expectancy_r,profit_factor,total_r
+2026-07-09,ES,Prudence — A/A+ uniquement (défaut),5,0.0,-1.0896,0.0,-5.45
+2026-07-09,NQ,Sweep session + V-shape (retest + prise partielle),30,0.4333,0.9118,2.4452,27.35

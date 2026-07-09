@@ -15,6 +15,7 @@ data/*.parquet
 !data/yahoo_*.csv
 # état du réglage automatique de stratégie (choisi chaque matin par la routine)
 !data/strategy_state.json
+!data/strategy_history.csv
 # NB : les PDF de knowledge/ SONT versionnés (dépôt privé) pour survivre aux
 # sessions — retirez-les du dépôt si vous ne le souhaitez pas.
 journal/backtests/
