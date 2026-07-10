@@ -42,7 +42,52 @@ class Headline:
 
 
 _NOISE = re.compile(r"\b(obituary|funeral|recipe|horoscope|lottery|movie|album"
-                    r"|high school|football|basketball|soccer)\b", re.I)
+                    r"|high school|football|basketball|soccer)\b"
+                    # « rate hike » d'une compagnie de gaz/électricité ≠ la Fed
+                    r"|(gas|electric|water|utility|utilities)\b.{0,60}\brate"
+                    r"|\bregulators?\b", re.I)
+
+# Direction pour les INDICES US (ES/NQ) — lexique mécanique, indicatif.
+_BULL = re.compile(r"\b(rally|rallies|surge|soar|jump|rebound|gains?|rise|rises|"
+                   r"higher|beat|beats|record high|cools?|cooling|rate cut|cuts? rates|"
+                   r"dovish|optimism|advance|climbs?|eases?|easing|boosts?)\b", re.I)
+_BEAR = re.compile(r"\b(fall|falls|drop|drops|plunge|slump|sell-?off|slide|tumble|"
+                   r"lower|miss|misses|fears?|worries|tensions?|war|strike|attack|"
+                   r"rate hike|hikes? rates|hawkish|hot inflation|sticky|recession|"
+                   r"downgrade|cuts? outlook|weak|jitters)\b", re.I)
+
+
+def direction(title: str) -> int:
+    """+1 bullish indices, -1 bearish, 0 ambigu/plat (si les deux matchent,
+    on tranche par le nombre d'occurrences)."""
+    b, r = len(_BULL.findall(title)), len(_BEAR.findall(title))
+    return 1 if b > r else (-1 if r > b else 0)
+
+
+def news_bias(heads: list["Headline"]) -> dict | None:
+    """Agrège les headlines en UNE prévision : bullish/bearish/neutre pour les
+    indices, avec les moteurs dominants. Pondéré par la pertinence macro."""
+    if not heads:
+        return None
+    total = wsum = 0.0
+    drivers: list[tuple[int, "Headline"]] = []
+    for h in heads:
+        d = direction(h.title)
+        if d != 0:                 # le ratio ne compte que les titres directionnels
+            total += d * h.score
+            wsum += h.score
+            drivers.append((d, h))
+    # moins de 2 titres directionnels = pas assez d'info pour trancher
+    if wsum == 0 or len(drivers) < 2:
+        return {"verdict": "neutre", "ratio": 0.0, "n_bull": 0, "n_bear": 0,
+                "drivers": []}
+    ratio = total / wsum                      # -1..+1
+    verdict = "bullish" if ratio > 0.25 else ("bearish" if ratio < -0.25 else "neutre")
+    drivers.sort(key=lambda t: -t[1].score)
+    return {"verdict": verdict, "ratio": ratio,
+            "n_bull": sum(1 for d, _ in drivers if d > 0),
+            "n_bear": sum(1 for d, _ in drivers if d < 0),
+            "drivers": [(d, h) for d, h in drivers if h.score >= 2][:3]}
 
 
 def _score(title: str) -> int:

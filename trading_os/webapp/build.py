@@ -505,22 +505,34 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
                        f'<span class="hsub num">VIX {rw.vix:.1f} ({rw.vix_chg:+.1f})</span></div>')
     hero_html = f'<div class="hero">{hero_tiles}</div>'
 
-    # fil macro 24 h (proxy gratuit des fils type Walter Bloomberg / FinancialJuice)
+    # prévision news 24 h : verdict directionnel indices (pas de fil brut —
+    # décision utilisateur : « je veux juste bullish ou bearish »)
     try:
-        from trading_os.news.headlines import fetch_macro_headlines
-        heads = fetch_macro_headlines()
+        from trading_os.news.headlines import fetch_macro_headlines, news_bias
+        nb = news_bias(fetch_macro_headlines(limit=14))
     except Exception:
-        heads = []
+        nb = None
     macro_html = ""
-    if heads:
-        items = "".join(
-            f'<li><span class="hsrc">{html.escape(h.source[:22])}</span> '
-            f'{html.escape(h.title)}</li>' for h in heads)
+    if nb is not None:
+        vmeta = {"bullish": ("bull", "▲ BULLISH"), "bearish": ("bear", "▼ BEARISH"),
+                 "neutre": ("warn", "◆ NEUTRE")}[nb["verdict"]]
+        drivers = "".join(
+            f'<li><span class="sarrow {"bull" if d > 0 else "bear"}">'
+            f'{"▲" if d > 0 else "▼"}</span> {html.escape(h.title[:90])}'
+            f' <span class="hsrc">{html.escape(h.source[:18])}</span></li>'
+            for d, h in nb["drivers"])
         rw_line = (f'<p class="empty">Météo du risque : {html.escape(rw.detail)}</p>'
                    if rw is not None else "")
-        macro_html = (f'<div class="eyebrow">// Fil macro — dernières 24 h '
-                      f'(hors calendrier)</div><section class="card">'
-                      f'<ul class="mfeed">{items}</ul>{rw_line}</section>')
+        macro_html = (
+            f'<div class="eyebrow">// Prévision news — dernières 24 h</div>'
+            f'<section class="card"><header class="card-head"><h2>Indices US</h2>'
+            f'<span class="price">{nb["n_bull"]} signaux haussiers · '
+            f'{nb["n_bear"]} baissiers</span>'
+            f'<span class="pill {vmeta[0]}">{vmeta[1]}</span></header>'
+            f'<ul class="mfeed">{drivers}</ul>{rw_line}'
+            f'<p class="empty">Classification mécanique par mots-clés — un contexte, '
+            f'pas un signal d\'entrée. Le setup IFVG reste le seul déclencheur.</p>'
+            f'</section>')
 
     week_html = ""
     if week:
