@@ -7,6 +7,8 @@ updated: 2026-07-09
 Page routeur : liens vers l'autorité, aucun détail restitué ici.
 
 - **Vérité des paramètres** → `config.yaml` (section `ifvg`), commentée en place.
+  Défauts actuels : NQ seul tradé (ES = réf. SMT), `entry_timing: retest`,
+  `exit.mode: scale` — la variante retenue par l'auto-réglage.
 - **Choix auto-réglé courant** → `data/strategy_state.json` (régénéré chaque matin).
 - **Pourquoi ces valeurs** → [[experiences/2026-07-sweep-session-vshape]],
   [[experiences/2026-06-scale-out]], [[Failed Ideas/ledger]].

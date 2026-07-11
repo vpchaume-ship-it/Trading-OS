@@ -106,7 +106,7 @@ def _header(cfg: dict) -> Panel:
 
     title = Text()
     title.append("  T R A D I N G   O S  ", style=f"bold black on {ACCENT}")
-    title.append("  ES/NQ · ICT IFVG", style="bold white")
+    title.append("  NQ · ICT IFVG", style="bold white")
     title.append("  ·  DÉMO UNIQUEMENT", style="bold red")
 
     return Panel(Group(Align.center(title), Rule(style=DIM), grid),
@@ -272,7 +272,7 @@ def menu_forward(cfg: dict) -> None:
         else:
             from trading_os.forward.monitor import run_semi_auto
             instrument = Prompt.ask("Instrument", choices=list(cfg["instruments"]),
-                                    default="ES")
+                                    default="NQ")
             run_semi_auto(cfg, instrument, console)
     except SafetyViolation as sv:
         console.print(Panel(str(sv), title="🛑 GARDE-FOU", border_style="bold red",

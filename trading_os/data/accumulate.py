@@ -58,7 +58,7 @@ def accumulate(instrument: str, directory: str | Path = "data") -> dict[str, tup
 
 
 def main() -> None:
-    for instrument in ("ES", "NQ"):
+    for instrument in ("NQ",):    # NQ seul tradé ; ES (réf. SMT) vient du flux live
         try:
             result = accumulate(instrument)
             parts = ", ".join(f"{k}: {n:,} barres" for k, (_, n) in result.items())

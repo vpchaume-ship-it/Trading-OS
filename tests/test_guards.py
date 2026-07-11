@@ -12,12 +12,13 @@ def test_demo_url_enforced():
 
 
 def test_order_size_and_symbol():
-    guards.assert_order_allowed("MESU5", 1)
     guards.assert_order_allowed("MNQZ5", 1)
     with pytest.raises(guards.SafetyViolation):
-        guards.assert_order_allowed("MESU5", 2)      # > 1 contrat
+        guards.assert_order_allowed("MNQZ5", 2)      # > 1 contrat
     with pytest.raises(guards.SafetyViolation):
-        guards.assert_order_allowed("ESU5", 1)       # mini interdit, micros only
+        guards.assert_order_allowed("MESU5", 1)      # ES retiré : MNQ uniquement
+    with pytest.raises(guards.SafetyViolation):
+        guards.assert_order_allowed("ESU5", 1)       # mini interdit
     with pytest.raises(guards.SafetyViolation):
         guards.assert_order_allowed("NQZ5", 1)
 

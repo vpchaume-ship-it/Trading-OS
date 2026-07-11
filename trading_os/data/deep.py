@@ -81,7 +81,9 @@ def refresh_deep(instrument: str, months: int = 12, directory: str = "data") -> 
 def main() -> None:
     import sys
     months = int(sys.argv[1]) if len(sys.argv) > 1 else 12
-    for inst in ("ES", "NQ"):
+    # NQ uniquement : seul instrument tradé/backtesté (ES = référence SMT,
+    # servie par le flux Yahoo léger, pas par l'historique profond)
+    for inst in ("NQ",):
         try:
             n = refresh_deep(inst, months)
             print(f"✓ {inst} — {n:,} barres 1m dans {_deep_path(inst)}")

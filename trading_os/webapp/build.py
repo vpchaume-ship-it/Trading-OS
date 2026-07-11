@@ -420,7 +420,13 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
     now = datetime.now(NY)
     day_kind, day_label = day_status(now)
 
-    frames = {name: fetch_frames(name) for name in cfg["premarket"]["instruments"]}
+    # instruments tradés + la référence SMT (ES) : fetchée pour la divergence
+    # ES/NQ dans instrument_matrix, mais SANS carte ni backtest.
+    fetch_names = list(cfg["premarket"]["instruments"])
+    smt_ref = cfg["premarket"].get("smt_reference")
+    if smt_ref and smt_ref not in fetch_names:
+        fetch_names.append(smt_ref)
+    frames = {name: fetch_frames(name) for name in fetch_names}
     cards, asof, heros = [], None, []
     for name in cfg["premarket"]["instruments"]:
         d = instrument_data(name, cfg, frames)

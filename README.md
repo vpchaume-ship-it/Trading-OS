@@ -1,6 +1,7 @@
-# Trading OS — ES/NQ · modèle ICT IFVG · terminal
+# Trading OS — NQ · modèle ICT IFVG · terminal
 
-Système de trading en terminal pour les futures **ES** et **NQ**, basé sur le modèle
+Système de trading en terminal pour les futures **NQ** (ES conservé uniquement
+comme référence SMT — jamais tradé), basé sur le modèle
 **IFVG (Inversion Fair Value Gap)** de la méthodologie ICT.
 
 > ⚠️ **DÉMO UNIQUEMENT.** Ce projet ne se connecte qu'à l'environnement demo de
@@ -99,7 +100,7 @@ concepts* extrait les passages concernés pour arbitrage.
 ## Garde-fous du forward test (codés en dur)
 
 - URL API ≠ demo Tradovate → refus de démarrer.
-- Taille max **1 contrat micro** (MES/MNQ uniquement).
+- Taille max **1 contrat micro** (MNQ uniquement — NQ seul instrument tradé).
 - Limite de perte journalière (le `config.yaml` ne peut que la durcir, jamais
   la dépasser : plafond dur à 300 $).
 - Pas de signal en no-trade-zone news.

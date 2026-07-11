@@ -9,9 +9,10 @@ from __future__ import annotations
 # The ONLY API base allowed. Any other URL -> refuse to start.
 DEMO_BASE_URL = "https://demo.tradovateapi.com/v1"
 
-# Position size cap: 1 contract, micros only.
+# Position size cap: 1 contract, micro Nasdaq only (décision 2026-07-10 :
+# NQ est le seul instrument tradé ; ES ne sert plus que de référence SMT).
 HARD_MAX_CONTRACTS = 1
-HARD_ALLOWED_SYMBOL_PREFIXES = ("MES", "MNQ")
+HARD_ALLOWED_SYMBOL_PREFIXES = ("MNQ",)
 
 # Absolute daily-loss ceiling (USD). config.forward.daily_loss_limit_usd may be
 # lower, never higher.

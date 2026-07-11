@@ -3,12 +3,15 @@
 # Tous les horaires de killzones sont en heure de New York.
 # ============================================================
 
+# NQ est le SEUL instrument tradé (décision 2026-07-10). ES reste défini
+# uniquement comme référence SMT (divergence ES/NQ) — jamais tradé, pas de
+# backtest, pas de carte dashboard.
 instruments:
   ES:
     tick_size: 0.25
-    tick_value: 12.50        # USD par tick, contrat mini ES
-    micro_tick_value: 1.25   # MES
-    mt5_symbol: "ES"         # à adapter au nom exact chez votre broker MT5
+    tick_value: 12.50        # référence SMT uniquement — non tradé
+    micro_tick_value: 1.25
+    mt5_symbol: "ES"
   NQ:
     tick_size: 0.25
     tick_value: 5.00         # USD par tick, contrat mini NQ
@@ -47,7 +50,7 @@ ifvg:
   retest_entry: "proximal"   # proximal / midpoint / distal (bord d'entrée dans la zone inversée, si entry_timing=retest)
   # Timing d'entrée : inversion_close = au marché sur la clôture de la bougie qui
   # inverse le FVG (méthode Dodgy) ; retest = ordre limite au retest de la zone.
-  entry_timing: "inversion_close"
+  entry_timing: "retest"
   stop_buffer_ticks: 2       # buffer au-delà du bord opposé de la zone pour le stop
   max_retests_per_zone: 1    # nombre d'entrées autorisées par zone inversée
   allowed_killzones: ["ny_am"]   # conforme aux PDF : 9:30-11:30 NY uniquement
@@ -83,7 +86,7 @@ ifvg:
   # l'extrême favorable ; scale = prise partielle (moitié à +1R, reste au
   # break-even jusqu'à la cible) — mécanique de Dodgy, remonte le win rate.
   exit:
-    mode: "full"             # full / be / trail / scale (scale = prise partielle, pour le win rate au retest)
+    mode: "scale"            # full / be / trail / scale (scale = prise partielle, pour le win rate au retest)
     be_trigger_rr: 1.0       # +1R : déclenche BE (be/trail) ou la prise partielle (scale)
     trail_rr: 1.0            # distance du stop suiveur (en R)
   target:
@@ -96,7 +99,7 @@ ifvg:
                              # niveau significatif type PDH/PDL (méthode Dodgy) — validé en backtest.
 
 backtest:
-  instrument: "ES"
+  instrument: "NQ"
   contract: "mini"           # mini / micro — impacte tick_value et commissions
   csv_file: ""               # chemin du CSV 1m ; vide = demandé dans le menu
   eod_flat_time: "16:55"     # clôture forcée des positions avant la fermeture (heure NY)
@@ -121,7 +124,7 @@ news:
 forward:
   # GARDE-FOUS — le code refuse de fonctionner hors demo, quelle que soit cette config.
   max_contracts: 1
-  allowed_symbols: ["MES", "MNQ"]      # micros uniquement
+  allowed_symbols: ["MNQ"]             # micro Nasdaq uniquement (NQ seul tradé)
   daily_loss_limit_usd: 150            # arrêt automatique du module
   poll_seconds: 30
   live_csv: ""                         # CSV alimenté en continu par scripts/export_mt5.py --watch
@@ -144,7 +147,8 @@ propfirm:
   risk_per_trade_usd: 200       # sizing simulé en micros
 
 premarket:
-  instruments: ["ES", "NQ"]
+  instruments: ["NQ"]      # NQ uniquement
+  smt_reference: "ES"      # flux ES conservé pour la divergence SMT seulement
   htf_timeframes: ["1h", "4h", "1d"]   # FVG non mitigés recherchés sur ces TF
   equal_level_tolerance_ticks: 2       # tolérance pour equal highs/lows
   swing_strength: 5
