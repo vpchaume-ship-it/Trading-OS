@@ -416,7 +416,10 @@ def insights_section(rows: list[dict], state: dict) -> str:
     return f'<section class="card"><ul class="conc">{bullets}</ul>{table}</section>'
 
 
-def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
+def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> Path:
+    """autotune=False = rebuild intraday léger : réutilise strategy_state.json
+    du matin (pas de grille de variantes, pas d'append d'historique — l'autotune
+    reste strictement quotidien pour éviter l'overfitting intraday)."""
     now = datetime.now(NY)
     day_kind, day_label = day_status(now)
 
@@ -437,30 +440,45 @@ def build_dashboard(cfg: dict, out_path: str | Path) -> Path:
             heros.append({"name": name, "price": d["price"], "bias": d_bias.bias})
     instruments_html = "".join(cards) or \
         '<section class="card"><p class="empty">Données de marché indisponibles.</p></section>'
-    # auto-tune: run the variant grid, pick per-instrument settings, persist them
+    # auto-tune : la grille complète ne tourne qu'au build QUOTIDIEN ; en
+    # intraday on rejoue le choix persisté du matin (anti-overfitting).
     variant_rows: list[dict] = []
-    for name in cfg["premarket"]["instruments"]:
-        try:
-            variant_rows += run_variants(cfg, name)
-        except Exception:
-            pass
-    state = {name: select_strategy(variant_rows, name)
-             for name in cfg["premarket"]["instruments"]}
-    save_state(state)
-    # run the auto-tuned backtest ONCE; reused by backtest + prop-firm sections
+    if autotune:
+        for name in cfg["premarket"]["instruments"]:
+            try:
+                variant_rows += run_variants(cfg, name)
+            except Exception:
+                pass
+        state = {name: select_strategy(variant_rows, name)
+                 for name in cfg["premarket"]["instruments"]}
+        save_state(state)
+    else:
+        from trading_os.webapp.insights import saved_state
+        state = saved_state(cfg["premarket"]["instruments"])
+    # run the auto-tuned backtest ONCE; reused by the backtest section
     bt: dict[str, dict | None] = {}
     for name in cfg["premarket"]["instruments"]:
         try:
             bt[name] = dashboard_backtest(cfg, name, patch=state[name]["patch"])
         except Exception:
             bt[name] = None
-    try:
-        from trading_os.webapp.insights import append_history
-        append_history(state, bt)      # trace l'évolution de l'auto-réglage
-    except Exception:
-        pass
+    if autotune:
+        try:
+            from trading_os.webapp.insights import append_history
+            append_history(state, bt)      # trace quotidienne de l'auto-réglage
+        except Exception:
+            pass
     backtest_html = backtest_section(cfg, state, bt)
-    insights_html = insights_section(variant_rows, state)
+    if autotune:
+        insights_html = insights_section(variant_rows, state)
+    else:
+        chosen = "".join(f'<li>⚙ <strong>{n}</strong> → « {html.escape(s["variant"])} » '
+                         f'({html.escape(s["reason"])})</li>' for n, s in state.items())
+        insights_html = ('<section class="card"><ul class="conc">' + chosen +
+                         '<li>Rafraîchissement intraday : prix, biais, news et stats '
+                         'recalculés — la comparaison des variantes et l\'auto-réglage '
+                         'ne tournent qu\'au build du matin (anti-overfitting).</li>'
+                         '</ul></section>')
 
     try:
         events = fetch_red_folders(cfg)
@@ -868,9 +886,11 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
 
 def main() -> None:
     cfg = load_config()
-    out = sys.argv[1] if len(sys.argv) > 1 else "journal/reports/dashboard.html"
-    path = build_dashboard(cfg, out)
-    print(f"Dashboard généré : {path}")
+    args = [a for a in sys.argv[1:] if a != "--light"]
+    light = "--light" in sys.argv[1:]   # intraday : réutilise le réglage du matin
+    out = args[0] if args else "journal/reports/dashboard.html"
+    path = build_dashboard(cfg, out, autotune=not light)
+    print(f"Dashboard généré : {path}" + (" (mode intraday, sans autotune)" if light else ""))
 
 
 if __name__ == "__main__":

@@ -23,9 +23,12 @@ VARIANTS: list[tuple[str, dict]] = [
     # Modèle utilisateur = sweep de niveau de session + IFVG + V-shape (dans la
     # config de base). La grille explore le TIMING d'entrée et la GESTION de sortie
     # par-dessus ce modèle. Chaque variante = 1 backtest complet.
-    #   base = entrée Dodgy (clôture d'inversion), sortie pleine.
-    ("Sweep session + V-shape (clôture inversion)", {}),
-    ("Sweep session + V-shape (retest, cible pleine)", {"entry_timing": "retest"}),
+    # Patches EXPLICITES (timing + sortie) : l'étiquette doit rester vraie même
+    # si les défauts de config.yaml changent.
+    ("Sweep session + V-shape (clôture inversion)",
+     {"entry_timing": "inversion_close", "exit_mode": "full"}),
+    ("Sweep session + V-shape (retest, cible pleine)",
+     {"entry_timing": "retest", "exit_mode": "full"}),
     ("Sweep session + V-shape (retest + prise partielle)",
      {"entry_timing": "retest", "exit_mode": "scale"}),
     # témoin : le même modèle SANS le filtre V-shape, pour mesurer son apport.
@@ -165,6 +168,26 @@ def load_state(path: str = STATE_PATH) -> dict | None:
         return json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def saved_state(instruments: list[str], path: str = STATE_PATH) -> dict:
+    """Rejoue le choix d'auto-réglage PERSISTÉ (strategy_state.json) sans
+    relancer la grille — pour les rebuilds intraday. L'autotune ne tourne
+    qu'une fois par jour (au build du matin) : le re-régler en cours de
+    session serait de l'overfitting intraday. Fallback prudent si absent."""
+    payload = load_state(path) or {}
+    saved = payload.get("instruments", {})
+    out = {}
+    for inst in instruments:
+        sel = saved.get(inst)
+        if isinstance(sel, dict) and "variant" in sel:
+            out[inst] = {"variant": sel["variant"],
+                         "patch": sel.get("patch", PATCHES.get(sel["variant"], {})),
+                         "reason": sel.get("reason", "") + " · réglage du matin (figé en intraday)"}
+        else:
+            out[inst] = {"variant": FALLBACK_NAME, "patch": {},
+                         "reason": "aucun réglage sauvegardé — fallback prudent"}
+    return out
 
 
 def conclusions(rows: list[dict]) -> list[str]:
