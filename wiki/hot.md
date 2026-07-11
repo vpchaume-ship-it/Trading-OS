@@ -3,12 +3,11 @@
 # État courant — 2026-07-11
 
 ## Stratégie auto-réglée
-- Auto-réglage du 2026-07-11T09:09:33
+- Auto-réglage du 2026-07-11T14:15:24
 - **NQ** : Sweep session + V-shape (retest + prise partielle) — 27 trades · WR 41% · +1.02 R/trade · PF 2.54
 
-## Wiki (3 experiences · 5 concepts · 3 research · 2 reference)
+## Wiki (3 experiences · 6 concepts · 3 research · 2 reference)
 Entrées récentes du journal :
-- [2026-07-13] decision | Retrait de la section « Éval prop firm — Lucid 50K Pro » du dashboard (demande utilisateur) | module propsim.py et config conservés, réactivable
 - [2026-07-13] ingest | Vidéo @huss.trades « Peak News Sources » (ForexFactory/Walter Bloomberg/FinancialJuice/Glint) | fil macro Google News RSS + météo du risque VIX/or/DXY ajoutés au dashboard ; X/FinancialJuice directs non faisables gratuitement (API payante)
 - [2026-07-13] decision | Fil macro brut remplacé par une PRÉVISION news (verdict bullish/bearish/neutre indices + 3 moteurs pondérés) — demande utilisateur « je veux juste bullish ou bearish » | lexique directionnel + ratio sur titres directionnels seulement ; faux positifs « rate hike » de compagnies de gaz/électricité blacklistés
 - [2026-07-10] decision | ES retiré comme instrument tradé : NQ uniquement (guards MNQ seul, config/CLI/deep/accumulate NQ, CSV ES supprimés, défauts = retest + prise partielle) ; ES conservé comme référence SMT au build | pytest complet à vérifier
@@ -16,6 +15,7 @@ Entrées récentes du journal :
 - [2026-07-11] bugfix | Patches VARIANTS rendus explicites (entry_timing + exit_mode) : depuis le passage des défauts à retest+scale, 3 variantes sur 4 tournaient identiques sous des étiquettes fausses | test anti-doublon ajouté ; l'autotune du matin redevient une vraie comparaison
 - [2026-07-11] bugfix | La fenêtre backtest était FIGÉE au 6/7 (repéré par l'utilisateur sur capture) : la routine du matin n'étendait pas l'historique profond Dukascopy, prioritaire sur Yahoo | refresh_deep("NQ") incrémental branché dans accumulate.main() ; deep 341k barres jusqu'au 10/7, fenêtre glissante 95k confirmée (01/04→10/07) ; autotune re-choisit retest+partielle (27 trades, WR 41 %, +1.02 R, PF 2.54)
 - [2026-07-11] decision | Audit sécurité repo public : AUCUN secret dans les fichiers ni dans tout l'historique (identifiants Tradovate jamais committés, .env jamais versionné, .env.example = placeholders) ; PDFs knowledge/ conservés (contenu non payant, confirmé par l'utilisateur) | reste optionnel : email perso dans les métadonnées d'auteur des commits GitHub
+- [2026-07-11] experience | Boucle d'auto-ajustement livrée : diagnose.py (pourquoi quotidien : tranches horaires/NTZ/RR/stops same-bar/DD) + feedback.py (4 règles evidence-gated ≥8 trades, 1 décision/jour, garde-fous durs codés, anti-overfit auto-revert, expiry 28 j) + fenêtre d'entrée moteur + section dashboard transparente (actifs, socle vs ajusté, historique, diagnostic) | 91 tests verts ; 1er passage : aucun ajustement (pas d'évidence) — comportement attendu
 
 ## Next Actions
 <!-- next-actions:start -->

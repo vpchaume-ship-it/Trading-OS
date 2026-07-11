@@ -62,6 +62,7 @@ class BacktestResult:
     skipped_no_bias: int = 0
     skipped_no_session_sweep: int = 0
     skipped_no_vshape: int = 0
+    skipped_entry_window: int = 0
 
 
 def _load_ntz_intervals(path: str, before_min: int, after_min: int) -> list[tuple]:
@@ -99,6 +100,14 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     kz = Killzones(cfg["killzones"])
     allowed_kz = icfg["allowed_killzones"]
     eod_flat = parse_hhmm(bcfg["eod_flat_time"])
+    # Fenêtre d'entrée restreinte À L'INTÉRIEUR de la killzone (posée par la
+    # boucle d'auto-ajustement feedback.py) ; None = killzone entière.
+    _ew = icfg.get("entry_window")
+    ew_lo = parse_hhmm(_ew["start"]) if _ew else None
+    ew_hi = parse_hhmm(_ew["end"]) if _ew else None
+
+    def in_entry_window(ts) -> bool:
+        return ew_lo is None or (ew_lo <= ts.time() <= ew_hi)
 
     ncfg = cfg["news"]["no_trade_zone"]
     ntz = _load_ntz_intervals(bcfg.get("news_history_csv", ""),
@@ -397,6 +406,9 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
                         continue
                     if ts.time() >= eod_flat or not kz.in_any(ts, allowed_kz):
                         continue
+                    if not in_entry_window(ts):
+                        result.skipped_entry_window += 1
+                        continue
                     in_zone_news = _in_ntz(ts, ntz)
                     if respect_ntz and in_zone_news:
                         result.skipped_ntz += 1
@@ -430,6 +442,9 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
             # Entry conditions at fill time
             if ts.time() >= eod_flat or not kz.in_any(ts, allowed_kz):
                 continue  # setup consumed by the touch, entry filtered out
+            if not in_entry_window(ts):
+                result.skipped_entry_window += 1
+                continue
             in_zone_news = _in_ntz(ts, ntz)
             if respect_ntz and in_zone_news:
                 result.skipped_ntz += 1

@@ -42,7 +42,7 @@ def apply_patch(cfg: dict, patch: dict) -> None:
     for k, v in patch.items():
         if k == "target_mode":
             cfg["ifvg"]["target"]["mode"] = v
-        elif k == "liq_min_rr":
+        elif k in ("liq_min_rr", "liquidity_min_rr"):
             cfg["ifvg"]["target"]["liquidity_min_rr"] = v
         elif k == "exit_mode":
             cfg["ifvg"].setdefault("exit", {})["mode"] = v

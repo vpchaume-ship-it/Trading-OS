@@ -322,6 +322,77 @@ def evolution_block(name: str) -> str:
             f'<tbody>{rows}</tbody></table></div>')
 
 
+FB_LABELS = {"risk_scale": "Taille de position", "entry_window": "Fenêtre d'entrée",
+             "stop_buffer_ticks": "Buffer du stop", "liquidity_min_rr": "Plancher RR"}
+
+
+def _fb_val(key: str, v) -> str:
+    if key == "entry_window" and isinstance(v, dict):
+        return f'{v["start"]}–{v["end"]}'
+    if key == "risk_scale":
+        return f"{v:g}×"
+    return "—" if v is None else f"{v:g}"
+
+
+def adjustments_section(fb: dict, review: dict | None,
+                        bt_base: dict, bt_adj: dict, instruments: list[str]) -> str:
+    """Transparence de la boucle d'auto-ajustement : quoi, pourquoi, depuis
+    quand, avec quel effet vs le socle — et le diagnostic du jour."""
+    active = fb.get("active", {})
+    hist = fb.get("history", [])
+    # -- ajustements actifs
+    if active:
+        rows_a = ""
+        for h in reversed(hist):
+            if h["status"] == "active" and h["key"] in active:
+                rows_a += (f'<li><span class="sarrow warn">⚙</span>'
+                           f'<strong>{FB_LABELS.get(h["key"], h["key"])}</strong> : '
+                           f'{_fb_val(h["key"], h["from"])} → '
+                           f'<strong>{_fb_val(h["key"], h["to"])}</strong> '
+                           f'(depuis le {h["date"][5:]}) — {html.escape(h["reason"])}</li>')
+        active_html = f'<ul class="conc">{rows_a}</ul>'
+    else:
+        active_html = ('<p class="empty">Aucun ajustement actif — le socle tourne '
+                       'tel quel. La boucle n\'ajuste que sur évidence '
+                       '(≥ 8 trades derrière chaque règle), une décision max par jour.</p>')
+    # -- comparaison socle vs ajusté
+    cmp_html = ""
+    if active:
+        for name in instruments:
+            b, a = bt_base.get(name), bt_adj.get(name)
+            if not b or not a or b["stats"]["n_trades"] == 0 or a["stats"]["n_trades"] == 0:
+                continue
+            bs, as_ = b["stats"], a["stats"]
+            cmp_html += (f'<p class="evold"><strong>{name}</strong> — socle : '
+                         f'{bs["n_trades"]} trades · WR {bs["win_rate"]:.0%} · '
+                         f'{bs["expectancy_r"]:+.2f} R — ajusté : '
+                         f'{as_["n_trades"]} trades · WR {as_["win_rate"]:.0%} · '
+                         f'{as_["expectancy_r"]:+.2f} R</p>')
+    # -- historique des décisions
+    hist_html = ""
+    if hist:
+        rows_h = "".join(
+            f'<tr><td>{h["date"][5:]}</td><td class="vname">'
+            f'{FB_LABELS.get(h["key"], h["key"])} → {_fb_val(h["key"], h["to"])}</td>'
+            f'<td>{"✓ actif" if h["status"] == "active" else h["status"]}</td></tr>'
+            for h in list(reversed(hist))[:8])
+        hist_html = ('<h3>Historique des décisions</h3><div class="scroll">'
+                     '<table class="fvg"><thead><tr><th>date</th><th>décision</th>'
+                     f'<th>statut</th></tr></thead><tbody>{rows_h}</tbody></table></div>')
+    # -- diagnostic du jour (le POURQUOI)
+    diag_html = ""
+    if review is not None:
+        bullets = "".join(f"<li>{html.escape(b)}</li>" for b in review["bullets"])
+        diag_html = f'<h3>Diagnostic (30 j glissants)</h3><ul class="conc">{bullets}</ul>'
+    guard = ('<p class="empty">Garde-fous durs (non configurables) : socle IFVG gelé, '
+             'risque jamais &gt; 1× (~200 $), réduction seulement en drawdown, stop '
+             'obligatoire (buffer 1–6 ticks), RR plancher 1.5–3.0, fenêtre d\'entrée '
+             'toujours dans la killzone (≥ 60 min), 1 décision/jour, annulation auto '
+             'si l\'espérance ne suit pas après 10 trades.</p>')
+    return (f'<section class="card">{active_html}{cmp_html}{hist_html}'
+            f'{diag_html}{guard}</section>')
+
+
 def backtest_section(cfg: dict, state: dict, bt: dict) -> str:
     blocks = []
     for name in cfg["premarket"]["instruments"]:
@@ -462,6 +533,32 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
             bt[name] = dashboard_backtest(cfg, name, patch=state[name]["patch"])
         except Exception:
             bt[name] = None
+    # ---- boucle d'auto-ajustement (paramètres secondaires, socle gelé) ----
+    from trading_os.backtest import feedback
+    from trading_os.backtest.diagnose import daily_review
+    inst0 = cfg["premarket"]["instruments"][0]
+    review = daily_review(bt[inst0]["trades"]) if bt.get(inst0) else None
+    fb = feedback.load_state()
+    if autotune:      # les décisions ne se prennent qu'au build quotidien
+        base = {"stop_buffer_ticks": cfg["ifvg"]["stop_buffer_ticks"],
+                "liquidity_min_rr": cfg["ifvg"]["target"]["liquidity_min_rr"]}
+        try:
+            fb, fb_notes = feedback.step(review, fb, base)
+            feedback.save_state(fb)
+        except Exception:
+            fb_notes = []
+    # rejouer le backtest avec les overrides actifs (config réellement tradée)
+    bt_base = dict(bt)
+    overrides = feedback.as_patch(fb.get("active", {}))
+    if overrides:
+        for name in cfg["premarket"]["instruments"]:
+            try:
+                bt[name] = dashboard_backtest(
+                    cfg, name, patch={**state[name]["patch"], **overrides})
+            except Exception:
+                pass
+        if review is not None and bt.get(inst0):
+            review = daily_review(bt[inst0]["trades"]) or review
     if autotune:
         try:
             from trading_os.webapp.insights import append_history
@@ -469,6 +566,8 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
         except Exception:
             pass
     backtest_html = backtest_section(cfg, state, bt)
+    adjust_html = adjustments_section(fb, review, bt_base, bt,
+                                      cfg["premarket"]["instruments"])
     if autotune:
         insights_html = insights_section(variant_rows, state)
     else:
@@ -815,6 +914,8 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
   <div class="eyebrow">// Backtest IFVG — stats évolutives (setups A/A+ uniquement)</div>
   <div class="grid2">{backtest_html}</div>
 
+  <div class="eyebrow">// Auto-ajustement — boucle de feedback (socle gelé)</div>
+  {adjust_html}
   <div class="eyebrow">// Conclusions du backtest — mises à jour chaque matin</div>
   {insights_html}
 
