@@ -322,6 +322,117 @@ def evolution_block(name: str) -> str:
             f'<tbody>{rows}</tbody></table></div>')
 
 
+def frozen_section(cfg: dict, state: dict, bt: dict, fb: dict,
+                   review: dict | None) -> str:
+    """LA carte backtest unique : config gelée style Dodgy — forward depuis le
+    gel en vedette, référence 24 mois, equity, risque sniper et auto-
+    apprentissage intégrés. Remplace les 5 anciennes sections."""
+    from trading_os.backtest import risklab
+    reg_on = cfg["backtest"].get("registered_on", "?")
+    blocks = []
+    for name in cfg["premarket"]["instruments"]:
+        d = bt.get(name)
+        sel = state.get(name, {})
+        if not d or d["stats"].get("n_trades", 0) == 0:
+            blocks.append('<section class="card"><p class="empty">En attente de '
+                          'données backtest.</p></section>')
+            continue
+        s = d["stats"]
+        t = d["trades"]
+        meta = (f'{d.get("source", d["tf"])} · {d["n_bars"]:,} barres · '
+                f'{d["start"]:%d/%m/%Y} → {d["end"]:%d/%m/%Y}').replace(",", " ")
+
+        def signed(v, fmt):
+            cls = "pos" if v > 0 else "neg"
+            return f'<span class="kval {cls}">{v:{fmt}}</span>'
+
+        # --- FORWARD depuis le gel : LE juge -----------------------------
+        fwd = t[pd.to_datetime(t["exit_time"], utc=True).dt.tz_convert("America/New_York")
+                >= pd.Timestamp(reg_on, tz="America/New_York")]
+        if len(fwd):
+            fr = fwd["net_r"]
+            fwd_kpis = f"""
+  <div class="kpis">
+    <div class="kpi"><span class="klab">🔒 Trades depuis le gel</span><span class="kval">{len(fwd)}</span><span class="ksub">objectif ≥ 15 pour juger</span></div>
+    <div class="kpi"><span class="klab">R forward</span>{signed(fr.sum(), "+.1f")}<span class="ksub">hors échantillon pur</span></div>
+    <div class="kpi"><span class="klab">WR forward</span><span class="kval">{(fr > 0).mean():.0%}</span><span class="ksub">vs 40 % attendu</span></div>
+  </div>"""
+        else:
+            fwd_kpis = (f'<p class="autotune">🔒 Gelée le {reg_on} — 0 trade forward '
+                        f"pour l'instant : chaque nouveau jour de marché est du VRAI "
+                        f'hors-échantillon, le compteur démarre ici.</p>')
+
+        # --- référence historique (24 mois) ------------------------------
+        ref_kpis = f"""
+  <div class="kpis">
+    <div class="kpi"><span class="klab">Espérance / trade</span>{signed(s["expectancy_r"], "+.2f")}<span class="ksub">R net · 24 mois</span></div>
+    <div class="kpi"><span class="klab">Win rate</span><span class="kval">{s["win_rate"]:.0%}</span><span class="ksub">{s["n_trades"]} trades</span></div>
+    <div class="kpi"><span class="klab">Profit factor</span><span class="kval">{min(s["profit_factor"], 99):.2f}</span><span class="ksub">gains/pertes</span></div>
+    <div class="kpi"><span class="klab">Total</span>{signed(s["total_r"], "+.1f")}<span class="ksub">DD max {s["max_drawdown_r"]:.1f} R</span></div>
+  </div>"""
+
+        # --- risque sniper + série en cours (une ligne) -------------------
+        risk_line = ""
+        try:
+            budget = float(cfg.get("propfirm", {}).get("max_loss_limit", 2000))
+            rec = risklab.recommended_risk_usd(s["win_rate"], budget)
+            scale = fb.get("active", {}).get("risk_scale", 1.0)
+            eff = max(risklab.RISK_FLOOR_USD, round(rec["risk_usd"] * scale / 5) * 5)
+            al = risklab.streak_alert(t, s["win_rate"])
+            am = {"ok": ("bull", "✓ série normale"), "attention": ("warn", "⚠ série élevée"),
+                  "alerte": ("bear", "⛔ série > p99")}[al["level"]]
+            risk_line = (f'<p class="stab"><span class="pill {am[0]}">{am[1].upper()}</span> '
+                         f'Risque : {eff:.0f} $/trade ({eff / 50000:.2%}'
+                         + (f' · réduit {scale:g}×' if scale < 1 else '') +
+                         f') · série en cours {al["current"]} '
+                         f'(attendue ≈ {al["expected_max"]:.0f}, p99 {al["p99"]})</p>')
+        except Exception:
+            pass
+
+        # --- auto-apprentissage (boucle feedback, une ligne) --------------
+        active = fb.get("active", {})
+        if active:
+            last = next((h for h in reversed(fb.get("history", []))
+                         if h["status"] == "active"), None)
+            learn = (f'<p class="autotune">🧠 Auto-apprentissage : '
+                     f'{len(active)} ajustement(s) actif(s)'
+                     + (f' — dernier : {FB_LABELS.get(last["key"], last["key"])} '
+                        f'({last["date"][5:]}) · {html.escape(last["reason"][:90])}'
+                        if last else '') + '</p>')
+        else:
+            learn = ('<p class="autotune">🧠 Auto-apprentissage : actif, aucun ajustement '
+                     "en cours — la boucle n'ajuste que sur évidence (≥ 8 trades), "
+                     'le socle gelé reste intouchable.</p>')
+        diag = ""
+        if review is not None and review.get("bullets"):
+            diag = ('<ul class="conc">' + "".join(
+                f"<li>{html.escape(b)}</li>" for b in review["bullets"][:2]) + '</ul>')
+
+        blocks.append(f"""
+<section class="card">
+  <header class="card-head"><h2>{name}</h2>
+    <span class="price">{meta}</span>
+    <span class="pill bull">🔒 GELÉE {reg_on[5:]} · STYLE DODGY</span></header>
+  <p class="autotune">⚙ <strong>{html.escape(sel.get("variant", ""))}</strong> — entrée
+  clôture d'inversion · sweep session + V-shape · 1 trade/jour · cible liquidité ≥ 2R</p>
+  <h3>Forward — le vrai test (depuis le gel)</h3>
+  {fwd_kpis}
+  <h3>Référence backtest (24 mois, coûts inclus)</h3>
+  {ref_kpis}
+  {stability_line(t)}
+  <h3>Equity (R cumulés)</h3>
+  {equity_svg(t, name)}
+  {risk_line}
+  {learn}
+  {diag}
+</section>""")
+    note = ('<p class="empty">Une seule config, gelée le ' + str(reg_on) + ' (pré-'
+            'enregistrement anti-overfitting) : le backtest 24 mois est la référence, '
+            "le compteur forward est le juge. L'auto-apprentissage n'ajuste que des "
+            'paramètres secondaires bornés, jamais le socle.</p>')
+    return "".join(blocks) + note
+
+
 def wf_section(wf: dict, instruments: list[str]) -> str:
     """Vitrine : métriques 100 % OUT-OF-SAMPLE du walk-forward (30 j de
     sélection -> 10 j de test figé, fenêtre glissante). C'est le rendement
@@ -625,47 +736,31 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
             heros.append({"name": name, "price": d["price"], "bias": d_bias.bias})
     instruments_html = "".join(cards) or \
         '<section class="card"><p class="empty">Données de marché indisponibles.</p></section>'
-    # auto-tune : la grille complète ne tourne qu'au build QUOTIDIEN ; en
-    # intraday on rejoue le choix persisté du matin (anti-overfitting).
+    # Config PRÉ-ENREGISTRÉE : une seule stratégie, gelée — pas de grille de
+    # variantes ni de walk-forward rétrospectif (non conclusif à cette cadence,
+    # décision 2026-07-11). Le forward depuis le gel est LA validation.
     variant_rows: list[dict] = []
-    wf: dict[str, dict | None] = {}
-    if autotune:
-        from trading_os.backtest.walkforward import walk_forward
+    reg = cfg["backtest"].get("registered_variant")
+    if reg:
+        from trading_os.webapp.insights import PATCHES
+        state = {name: {"variant": reg, "patch": PATCHES.get(reg, {}),
+                        "reason": ("config PRÉ-ENREGISTRÉE le "
+                                   f"{cfg['backtest'].get('registered_on', '?')}")}
+                 for name in cfg["premarket"]["instruments"]}
+        if autotune:
+            save_state(state)
+    elif autotune:
         from trading_os.webapp.insights import variant_trades
         for name in cfg["premarket"]["instruments"]:
             try:
-                rows, streams = variant_trades(cfg, name)
-                variant_rows += rows
-                wcfg = cfg["backtest"].get("walkforward", {})
-                wf[name] = walk_forward(streams, name,
-                                        train_days=wcfg.get("train_days", 30),
-                                        test_days=wcfg.get("test_days", 10))
+                variant_rows += variant_trades(cfg, name)[0]
             except Exception:
-                wf[name] = None
+                pass
         state = {name: select_strategy(variant_rows, name)
                  for name in cfg["premarket"]["instruments"]}
-        # PRÉ-ENREGISTREMENT : la config gelée prime sur la sélection du jour
-        # (anti-biais de sélection ; la grille reste calculée pour information).
-        reg = cfg["backtest"].get("registered_variant")
-        if reg:
-            from trading_os.webapp.insights import PATCHES
-            for name in state:
-                row = next((r for r in variant_rows
-                            if r["instrument"] == name and r["variant"] == reg), None)
-                why = (f"{row['n_trades']} trades · WR {row['win_rate']:.0%} · "
-                       f"{row['expectancy_r']:+.2f} R · PF {min(row['profit_factor'], 99):.2f}"
-                       if row and row.get("n_trades") else "")
-                state[name] = {"variant": reg, "patch": PATCHES.get(reg, {}),
-                               "reason": ("config PRÉ-ENREGISTRÉE le "
-                                          f"{cfg['backtest'].get('registered_on', '?')} — "
-                                          + why)}
         save_state(state)
-        from trading_os.backtest.walkforward import save_results
-        save_results(wf)
     else:
-        from trading_os.backtest.walkforward import load_results
         from trading_os.webapp.insights import saved_state
-        wf = load_results()                       # OOS du matin, affiché tel quel
         state = saved_state(cfg["premarket"]["instruments"])
     # run the auto-tuned backtest ONCE; reused by the backtest section
     bt: dict[str, dict | None] = {}
@@ -726,21 +821,7 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
                                timeout=60, check=False)
         except Exception:
             pass
-    backtest_html = backtest_section(cfg, state, bt)
-    wf_html = wf_section(wf, cfg["premarket"]["instruments"])
-    risk_html = risk_section(cfg, wf, bt, fb, cfg["premarket"]["instruments"])
-    adjust_html = adjustments_section(fb, review, bt_base, bt,
-                                      cfg["premarket"]["instruments"])
-    if autotune:
-        insights_html = insights_section(variant_rows, state)
-    else:
-        chosen = "".join(f'<li>⚙ <strong>{n}</strong> → « {html.escape(s["variant"])} » '
-                         f'({html.escape(s["reason"])})</li>' for n, s in state.items())
-        insights_html = ('<section class="card"><ul class="conc">' + chosen +
-                         '<li>Rafraîchissement intraday : prix, biais, news et stats '
-                         'recalculés — la comparaison des variantes et l\'auto-réglage '
-                         'ne tournent qu\'au build du matin (anti-overfitting).</li>'
-                         '</ul></section>')
+    backtest_html = frozen_section(cfg, state, bt, fb, review)
 
     try:
         events = fetch_red_folders(cfg)
@@ -1074,17 +1155,9 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
   <div class="eyebrow">// Biais &amp; niveaux — D · 4H · 1H</div>
   <div class="grid2">{instruments_html}</div>
 
-  <div class="eyebrow">// Validation walk-forward — le rendement HORS échantillon</div>
-  <div class="grid2">{wf_html}</div>
-  <div class="eyebrow">// Risque — profil sniper (séries perdantes au WR réel)</div>
-  <div class="grid2">{risk_html}</div>
-  <div class="eyebrow">// Backtest IFVG — config auto-réglée (in-sample, pour contexte)</div>
+  <div class="eyebrow">// Backtest &amp; forward — config gelée style Dodgy · auto-apprentissage</div>
   <div class="grid2">{backtest_html}</div>
 
-  <div class="eyebrow">// Auto-ajustement — boucle de feedback (socle gelé)</div>
-  {adjust_html}
-  <div class="eyebrow">// Conclusions du backtest — mises à jour chaque matin</div>
-  {insights_html}
 
 
   <div class="eyebrow">// Fenêtre de trading</div>
