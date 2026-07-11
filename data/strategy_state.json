@@ -1,5 +1,5 @@
 {
-  "chosen_at": "2026-07-11T08:55:46",
+  "chosen_at": "2026-07-11T09:09:33",
   "guards": {
     "min_trades": 10,
     "min_expectancy": 0.1,
@@ -7,9 +7,12 @@
   },
   "instruments": {
     "NQ": {
-      "variant": "Sweep session + V-shape (clôture inversion)",
-      "patch": {},
-      "reason": "30 trades · WR 43% · +0.91 R/trade · PF 2.45"
+      "variant": "Sweep session + V-shape (retest + prise partielle)",
+      "patch": {
+        "entry_timing": "retest",
+        "exit_mode": "scale"
+      },
+      "reason": "27 trades · WR 41% · +1.02 R/trade · PF 2.54"
     }
   }
 }

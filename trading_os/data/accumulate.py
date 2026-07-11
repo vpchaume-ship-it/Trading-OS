@@ -65,6 +65,15 @@ def main() -> None:
             print(f"✓ {instrument} — {parts}")
         except Exception as exc:
             print(f"✗ {instrument} — {exc}")
+    # Historique profond Dukascopy : extension incrémentale quotidienne, sinon
+    # la fenêtre du backtest reste figée à la dernière barre stockée (le deep
+    # est prioritaire sur Yahoo dans select_backtest_df).
+    try:
+        from trading_os.data.deep import refresh_deep
+        n = refresh_deep("NQ")
+        print(f"✓ NQ profond — {n:,} barres 1m après extension")
+    except Exception as exc:
+        print(f"✗ NQ profond — {exc} (le backtest continue sur l'existant)")
 
 
 if __name__ == "__main__":
