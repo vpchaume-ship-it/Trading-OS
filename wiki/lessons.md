@@ -25,6 +25,11 @@ sur plusieurs expériences. Détails et chiffres dans les pages d'expérience li
 5. **Se méfier des proxys grossiers.** Le filtre de biais « dérive sur 90
    barres » a tué la stratégie NQ (elle fade la dérive). Un filtre plausible
    n'est pas un filtre validé.
-6. **Les garde-fous d'auto-réglage sont vitaux.** Sans min_trades/expectancy/PF,
+6. **Les hypothèses d'exécution pèsent plus que les filtres.** L'audit du
+   2026-07-11 (fill au touch → trade-through strict, slippage marché sur
+   l'entrée inversion, fills sur barre de reclaim) a fait passer le retest+
+   partielle de 41 % WR/+1.02 R à 23 %/+0.13 R sur la même fenêtre. Un
+   backtest sans friction réaliste flatte, il n'informe pas.
+7. **Les garde-fous d'auto-réglage sont vitaux.** Sans min_trades/expectancy/PF,
    l'auto-tune choisit du bruit (il avait rétrogradé NQ vers une config à 24 %
    WR non voulue).

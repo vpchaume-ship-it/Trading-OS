@@ -559,6 +559,17 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
                 pass
         if review is not None and bt.get(inst0):
             review = daily_review(bt[inst0]["trades"]) or review
+        # anti-overfit : l'ajusté doit prouver qu'il bat le socle (mesure directe)
+        if autotune and bt_base.get(inst0) and bt.get(inst0):
+            try:
+                fb, rv_notes = feedback.compare_adjusted(
+                    fb, bt_base[inst0]["stats"], bt[inst0]["stats"],
+                    n_base_now=bt_base[inst0]["stats"].get("n_trades", 0))
+                feedback.save_state(fb)
+                if rv_notes and not feedback.as_patch(fb.get("active", {})):
+                    bt = bt_base      # tous les overrides annulés -> socle
+            except Exception:
+                pass
     if autotune:
         try:
             from trading_os.webapp.insights import append_history

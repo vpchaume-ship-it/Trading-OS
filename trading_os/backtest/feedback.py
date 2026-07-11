@@ -104,6 +104,29 @@ def _revert(state: dict, key: str, why: str, today: str) -> None:
             break
 
 
+def compare_adjusted(state: dict, base_stats: dict | None, adj_stats: dict | None,
+                     n_base_now: int, today: str | None = None) -> tuple[dict, list[str]]:
+    """Anti-overfit par MESURE DIRECTE : si, après ADOPTION_REVIEW_TRADES
+    nouveaux trades, la config ajustée fait moins bien que le socle (espérance
+    inférieure de REVERT_IF_EXP_DROPS/3 R ou plus), le dernier ajustement adopté
+    est annulé — l'ajustement doit prouver qu'il paie, pas l'inverse."""
+    today = today or date.today().isoformat()
+    notes: list[str] = []
+    active = [h for h in state["history"] if h["status"] == "active"]
+    if not active or not base_stats or not adj_stats \
+            or base_stats.get("n_trades", 0) == 0 or adj_stats.get("n_trades", 0) == 0:
+        return state, notes
+    latest = max(active, key=lambda h: h["date"])
+    n_new = n_base_now - latest.get("n_at_adoption", 0)
+    gap = adj_stats["expectancy_r"] - base_stats["expectancy_r"]
+    if n_new >= ADOPTION_REVIEW_TRADES and gap < -REVERT_IF_EXP_DROPS / 3:
+        _revert(state, latest["key"],
+                f"la config ajustée sous-performe le socle ({gap:+.2f} R/trade "
+                f"après {n_new} nouveaux trades)", today)
+        notes.append(f"Ajustement « {latest['key']} » annulé : le socle fait mieux.")
+    return state, notes
+
+
 # ----------------------------------------------------------- la boucle
 
 def step(review: dict | None, state: dict, base: dict,
@@ -127,16 +150,11 @@ def step(review: dict | None, state: dict, base: dict,
             _revert(state, "entry_window", "expiration programmée (28 j) — re-jugement à neuf", today)
             notes.append("Filtre horaire expiré (28 j) : fenêtre complète restaurée.")
 
-    # -- maintenance 2 : anti-overfit — un ajustement qui n'a pas tenu sa
-    #    promesse après N nouveaux trades est annulé
-    for h in [h for h in state["history"] if h["status"] == "active"]:
-        n_new = review["n_total"] - h.get("n_at_adoption", 0)
-        if n_new >= ADOPTION_REVIEW_TRADES and \
-                review["long"]["expectancy_r"] < h.get("exp_at_adoption", 0) - REVERT_IF_EXP_DROPS:
-            _revert(state, h["key"], f"espérance en baisse après {n_new} trades "
-                    f"({review['long']['expectancy_r']:+.2f} R vs "
-                    f"{h.get('exp_at_adoption', 0):+.2f} R à l'adoption)", today)
-            notes.append(f"Ajustement « {h['key']} » annulé : il n'a pas amélioré l'espérance.")
+    # -- maintenance 2 : l'anti-overfit par comparaison DIRECTE ajusté-vs-socle
+    #    est fait par compare_adjusted() (appelé par le build, qui possède les
+    #    deux runs). Audit 2026-07-11 : l'ancienne comparaison « espérance socle
+    #    maintenant vs à l'adoption » mesurait la dérive du marché, pas l'effet
+    #    de l'ajustement — supprimée.
 
     # -- maintenance 3 : restauration du risque plein quand le DD est résorbé
     if "risk_scale" in state["active"] and review["at_equity_high"] \

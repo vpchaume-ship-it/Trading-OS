@@ -109,6 +109,10 @@ backtest:
       micro: 0.85
     slippage_ticks_stop: 1   # slippage sur les sorties au stop (ordre marché)
     slippage_ticks_entry: 0  # entrée limite : 0 par défaut
+  # Réalisme des fills limites (audit 2026-07-11) : true = le prix doit
+  # TRAVERSER le niveau (trade-through) pour remplir — un simple touch ne
+  # garantit pas la file d'attente. false = ancien comportement (optimiste).
+  fill_requires_through: true
   respect_no_trade_zones: true
   news_history_csv: "journal/news/history.csv"   # accumulé par le module 1
 

@@ -26,4 +26,11 @@ et `v_shape()`, activés par `ifvg.setup.sweep_mode: "session"` et
 2026-07-07 (`min_rating` passé à 0, la qualité vient du contexte). Meilleur WR
 atteint en restant rentable. Réserve : 30 trades = échantillon encore mince.
 
+**Correctif d'audit (2026-07-11)** : ces chiffres provenaient d'un moteur au
+fill optimiste (touch). Avec l'exécution réaliste (trade-through + slippage
+marché + fills de reclaim), sur la fenêtre 01/04→10/07 : clôture inversion
+20 trades · 25 % WR · +0.93 R · PF 2.19 ; retest cible pleine 39 · 13 % ·
++0.94 R ; retest+partielle 39 · 23 % · +0.13 R. L'edge reste positif, le WR
+élevé était en partie un artefact d'exécution.
+
 **Voir aussi** : [[experiences/2026-07-entree-inversion-vs-retest]], [[lessons]] (leçons 1-2).

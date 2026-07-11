@@ -1,4 +1,18 @@
 {
-  "active": {},
-  "history": []
+  "active": {
+    "risk_scale": 0.5
+  },
+  "history": [
+    {
+      "date": "2026-07-11",
+      "key": "risk_scale",
+      "from": 1.0,
+      "to": 0.5,
+      "reason": "réduction du risque en drawdown (protection du capital, jamais l'inverse)",
+      "evidence": "DD 30j -5.2 R · 10 derniers trades +20.9 R",
+      "status": "active",
+      "n_at_adoption": 20,
+      "exp_at_adoption": 1.567
+    }
+  ]
 }

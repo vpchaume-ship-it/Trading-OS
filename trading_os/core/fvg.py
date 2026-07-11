@@ -49,6 +49,7 @@ class FVG:
     inverted_idx: int | None = None
     inverted_time: pd.Timestamp | None = None
     retests: int = 0
+    consumed_idx: int | None = None   # barre du reclaim/consommation (fills same-bar)
 
     @property
     def size(self) -> float:
@@ -168,22 +169,22 @@ class FVGTracker:
         if f.ifvg_direction == Direction.BEARISH:
             # price is below the zone; a decisive close back above the top reclaims it
             if self._decisive_beyond(o, c, f.top, below=False):
-                f.status = FVGStatus.CONSUMED
+                f.status, f.consumed_idx = FVGStatus.CONSUMED, idx
                 return
             if h >= f.bottom:  # traded back into the zone from below
                 f.retests += 1
                 yield RetestEvent(f, idx, time)
                 if f.retests >= self.max_retests:
-                    f.status = FVGStatus.CONSUMED
+                    f.status, f.consumed_idx = FVGStatus.CONSUMED, idx
         else:
             if self._decisive_beyond(o, c, f.bottom, below=True):
-                f.status = FVGStatus.CONSUMED
+                f.status, f.consumed_idx = FVGStatus.CONSUMED, idx
                 return
             if l <= f.top:  # traded back into the zone from above
                 f.retests += 1
                 yield RetestEvent(f, idx, time)
                 if f.retests >= self.max_retests:
-                    f.status = FVGStatus.CONSUMED
+                    f.status, f.consumed_idx = FVGStatus.CONSUMED, idx
 
 
 def detect_unmitigated_fvgs(df: pd.DataFrame, tick_size: float,

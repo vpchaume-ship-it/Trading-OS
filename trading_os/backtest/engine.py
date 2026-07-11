@@ -113,6 +113,9 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     ntz = _load_ntz_intervals(bcfg.get("news_history_csv", ""),
                               ncfg["minutes_before"], ncfg["minutes_after"])
     respect_ntz = bcfg.get("respect_no_trade_zones", True)
+    # Réalisme des fills limites : True (défaut) = le prix doit dépasser le
+    # niveau (trade-through) ; False = l'ancien fill au simple touch (optimiste).
+    fill_through = bcfg.get("fill_requires_through", True)
 
     target_cfg = icfg["target"]
     use_liquidity = target_cfg["mode"] == "liquidity"
@@ -129,26 +132,35 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     vshape_max_bars = setup_cfg.get("vshape_max_bars", 8)
     vshape_min_move_ticks = setup_cfg.get("vshape_min_move_ticks", 20)
 
-    # Previous-session liquidity levels per bar (for sweep_mode="session"):
-    # prior day's high/low (PDH/PDL) + today's overnight high/low (00:00 -> killzone
-    # start = Asia+London). Complete before the NY killzone -> no lookahead.
+    # Previous-session liquidity levels per bar (for sweep_mode="session").
+    # Anti-lookahead audité (2026-07-11) :
+    #  * jour de TRADING CME (bascule 18:00 NY, ts+6h) — le dimanche soir
+    #    appartient au lundi, le « jour précédent » du lundi est bien vendredi ;
+    #  * PDH/PDL = extrêmes du jour de trading PRÉCÉDENT (complet, sûr) ;
+    #  * overnight (18:00 -> ouverture de la killzone AUTORISÉE) : niveau FIGÉ à
+    #    l'ouverture, et NaN pour toute barre antérieure — une fenêtre encore en
+    #    formation ne fournit jamais son propre extrême (zéro lookahead).
     pdh_arr = pdl_arr = onh_arr = onl_arr = None
     if sweep_mode == "session":
         import numpy as _np
-        kz_start = min(parse_hhmm(z["start"]) for z in cfg["killzones"].values())
+        kz_start = min(parse_hhmm(cfg["killzones"][z]["start"]) for z in allowed_kz)
         dts = df.index
-        dates = _np.array([d.date() for d in dts])
-        day_hi = df.groupby(dates)["high"].max()
-        day_lo = df.groupby(dates)["low"].min()
-        on_mask = _np.array([t < kz_start for t in dts.time])
-        on_hi = df["high"][on_mask].groupby(dates[on_mask]).max()
-        on_lo = df["low"][on_mask].groupby(dates[on_mask]).min()
+        tdays = _np.array([(t + pd.Timedelta(hours=6)).date() for t in dts])
+        times_of_day = dts.time
+        day_hi = df["high"].groupby(tdays).max()
+        day_lo = df["low"].groupby(tdays).min()
+        on_mask = _np.array([t >= parse_hhmm("18:00") or t < kz_start
+                             for t in times_of_day])
+        on_hi = df["high"][on_mask].groupby(tdays[on_mask]).max()
+        on_lo = df["low"][on_mask].groupby(tdays[on_mask]).min()
         uniq = list(day_hi.index)
         prev = {d: uniq[k - 1] for k, d in enumerate(uniq) if k > 0}
-        pdh_arr = _np.array([day_hi.get(prev.get(d), _np.nan) for d in dates])
-        pdl_arr = _np.array([day_lo.get(prev.get(d), _np.nan) for d in dates])
-        onh_arr = _np.array([on_hi.get(d, _np.nan) for d in dates])
-        onl_arr = _np.array([on_lo.get(d, _np.nan) for d in dates])
+        pdh_arr = _np.array([day_hi.get(prev.get(d), _np.nan) for d in tdays])
+        pdl_arr = _np.array([day_lo.get(prev.get(d), _np.nan) for d in tdays])
+        # figé à l'ouverture : utilisable uniquement une fois la fenêtre close
+        usable = _np.array([kz_start <= t < parse_hhmm("18:00") for t in times_of_day])
+        onh_arr = _np.where(usable, _np.array([on_hi.get(d, _np.nan) for d in tdays]), _np.nan)
+        onl_arr = _np.where(usable, _np.array([on_lo.get(d, _np.nan) for d in tdays]), _np.nan)
     # Full swing list precomputed; lookahead is avoided at use time via the
     # confirmation lag inside nearest_liquidity_target() / the sweep check.
     swings = find_swings(df, swing_strength) if (use_liquidity or require_sweep) else []
@@ -283,7 +295,9 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
             return None
         if f.ifvg_direction == Direction.BEARISH:
             if inv_ohlc is not None:                 # enter at the inversion close
-                entry = inv_ohlc[3]; stop = inv_ohlc[1] + stop_buffer   # stop above inv high
+                # ordre MARCHÉ -> slippage contre nous (audit réalisme 2026-07-11)
+                entry = inv_ohlc[3] - slip_stop
+                stop = inv_ohlc[1] + stop_buffer     # stop above inv high
             else:
                 edges = {"proximal": f.bottom, "midpoint": (f.top + f.bottom) / 2, "distal": f.top}
                 entry = edges[entry_mode]; stop = f.top + stop_buffer
@@ -299,7 +313,8 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
                 tgt = entry - target_cfg["fixed_rr"] * risk
         else:
             if inv_ohlc is not None:
-                entry = inv_ohlc[3]; stop = inv_ohlc[2] - stop_buffer   # stop below inv low
+                entry = inv_ohlc[3] + slip_stop      # marché : slippage contre nous
+                stop = inv_ohlc[2] - stop_buffer     # stop below inv low
             else:
                 edges = {"proximal": f.top, "midpoint": (f.top + f.bottom) / 2, "distal": f.bottom}
                 entry = edges[entry_mode]; stop = f.bottom - stop_buffer
@@ -433,11 +448,23 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
                 # inversion bar itself (no lookahead)
                 still.append(stp)
                 continue
-            if stp.fvg.status != FVGStatus.INVERTED and id(stp.fvg) not in retested_now:
-                continue  # zone reclaimed or expired -> cancel the pending order
-            touched = (h >= stp.entry) if stp.direction == Direction.BEARISH else (l <= stp.entry)
+            # Un reclaim SUR CETTE BARRE n'annule pas un ordre que la barre a
+            # touché avant de clôturer au-delà : en réel, le limite est rempli
+            # puis (souvent) stoppé — l'ignorer serait un biais optimiste.
+            reclaimed_this_bar = (stp.fvg.status == FVGStatus.CONSUMED
+                                  and stp.fvg.consumed_idx == i)
+            if stp.fvg.status != FVGStatus.INVERTED \
+                    and id(stp.fvg) not in retested_now and not reclaimed_this_bar:
+                continue  # zone reclaimed earlier or expired -> cancel the order
+            # Fill réaliste : le prix doit TRAVERSER le limite (trade-through),
+            # pas seulement le toucher (file d'attente) — configurable.
+            if fill_through:
+                touched = (h > stp.entry) if stp.direction == Direction.BEARISH else (l < stp.entry)
+            else:
+                touched = (h >= stp.entry) if stp.direction == Direction.BEARISH else (l <= stp.entry)
             if not touched:
-                still.append(stp)
+                if not reclaimed_this_bar:
+                    still.append(stp)
                 continue
             # Entry conditions at fill time
             if ts.time() >= eod_flat or not kz.in_any(ts, allowed_kz):

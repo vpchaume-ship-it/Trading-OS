@@ -85,15 +85,19 @@ def test_window_expiry():
     assert "entry_window" not in st["active"] and st["history"][0]["status"] == "annulé"
 
 
-def test_antioverfit_revert():
+def test_step_does_not_revert_on_market_drift():
+    """Audit 2026-07-11 : une baisse d'espérance du FLUX SOCLE ne doit plus
+    annuler un ajustement (c'était mesurer la dérive du marché, pas l'effet de
+    l'ajustement). L'anti-overfit correct = feedback.compare_adjusted (testé
+    dans test_audit_fixes)."""
     st = {"active": {"stop_buffer_ticks": 3},
           "history": [{"date": "2026-07-01", "key": "stop_buffer_ticks", "from": 2,
                        "to": 3, "reason": "x", "evidence": "x", "status": "active",
                        "n_at_adoption": 20, "exp_at_adoption": 0.9}]}
-    rv = review_stub(n_total=35)                     # 15 nouveaux trades
-    rv["long"]["expectancy_r"] = 0.3                 # -0.6 R vs adoption
+    rv = review_stub(n_total=35)
+    rv["long"]["expectancy_r"] = 0.3                 # dérive du marché
     st, _ = feedback.step(rv, st, BASE, today="2026-07-11")
-    assert "stop_buffer_ticks" not in st["active"]
+    assert st["active"]["stop_buffer_ticks"] == 3    # conservé — pas de faux revert
 
 
 def test_engine_entry_window_blocks_trades():
