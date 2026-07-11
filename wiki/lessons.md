@@ -34,6 +34,12 @@ sur plusieurs expériences. Détails et chiffres dans les pages d'expérience li
    2026-07-11 (12 mois, moteur post-audit) : +0.9 R in-sample → **-0.45 R
    out-of-sample** (10 trades, PF 0.52). La sélection de variante capte du
    bruit ; seul le rendement hors échantillon compte désormais.
-8. **Les garde-fous d'auto-réglage sont vitaux.** Sans min_trades/expectancy/PF,
+8. **À cadence sniper, le walk-forward rétrospectif ne tranche pas.** ~25
+   trades/an → ~18 trades OOS dont le signe dépend du calibrage des plis.
+   La validation propre : PRÉ-ENREGISTRER la config et laisser le forward
+   trancher (gel du 2026-07-11, seuil de jugement ≥ 15 trades).
+9. **La discipline est un edge mesurable.** max_trades_per_day 1 (le setup
+   du matin, comme Dodgy) : +0.13 R → +0.50 R sur la même config retest.
+10. **Les garde-fous d'auto-réglage sont vitaux.** Sans min_trades/expectancy/PF,
    l'auto-tune choisit du bruit (il avait rétrogradé NQ vers une config à 24 %
    WR non voulue).

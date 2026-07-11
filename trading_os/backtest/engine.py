@@ -63,6 +63,8 @@ class BacktestResult:
     skipped_no_session_sweep: int = 0
     skipped_no_vshape: int = 0
     skipped_entry_window: int = 0
+    skipped_no_smt: int = 0
+    skipped_daily_cap: int = 0
 
 
 def _load_ntz_intervals(path: str, before_min: int, after_min: int) -> list[tuple]:
@@ -83,8 +85,11 @@ def _in_ntz(ts: pd.Timestamp, intervals: list[tuple]) -> bool:
     return any(a <= ts <= b for a, b in intervals)
 
 
-def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult:
-    """df: 1m (or resampled) OHLCV indexed by NY-tz timestamps."""
+def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str,
+                 sib_df: pd.DataFrame | None = None) -> BacktestResult:
+    """df: 1m (or resampled) OHLCV indexed by NY-tz timestamps.
+    sib_df: OHLC de l'indice frère (ES pour NQ) aligné en temps — requis
+    seulement si ifvg.setup.require_smt est actif (divergence SMT)."""
     icfg = cfg["ifvg"]
     bcfg = cfg["backtest"]
     spec = cfg["instruments"][instrument]
@@ -131,6 +136,18 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     require_vshape = setup_cfg.get("require_vshape", False)
     vshape_max_bars = setup_cfg.get("vshape_max_bars", 8)
     vshape_min_move_ticks = setup_cfg.get("vshape_min_move_ticks", 20)
+    # Confluence SMT (méthode Dodgy) : au moment du sweep, l'indice frère (ES)
+    # ne doit PAS avoir fait le même extrême — le sweep NQ est alors un « trap »
+    # non confirmé par ES = divergence, le vrai signal de Dodgy.
+    require_smt = setup_cfg.get("require_smt", False) and sib_df is not None
+    smt_lookback = setup_cfg.get("smt_lookback", sweep_lookback)
+    sib_h = sib_l = None
+    if require_smt:
+        sib_h = sib_df["high"].reindex(df.index, method="ffill").to_numpy()
+        sib_l = sib_df["low"].reindex(df.index, method="ffill").to_numpy()
+    # Discipline Dodgy : N setups max par jour (0 = illimité). Il prend LE
+    # setup propre du matin, pas tous les signaux de la fenêtre.
+    max_per_day = int(icfg.get("max_trades_per_day", 0))
 
     # Previous-session liquidity levels per bar (for sweep_mode="session").
     # Anti-lookahead audité (2026-07-11) :
@@ -161,6 +178,20 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         usable = _np.array([kz_start <= t < parse_hhmm("18:00") for t in times_of_day])
         onh_arr = _np.where(usable, _np.array([on_hi.get(d, _np.nan) for d in tdays]), _np.nan)
         onl_arr = _np.where(usable, _np.array([on_lo.get(d, _np.nan) for d in tdays]), _np.nan)
+        # SMT fidèle à Dodgy : les MÊMES niveaux de session, côté ES. La
+        # divergence = NQ balaye son niveau pendant qu'ES ÉCHOUE à balayer le
+        # sien (mêmes règles anti-lookahead : veille complète + ON figé).
+        spdh_arr = spdl_arr = sonh_arr = sonl_arr = None
+        if require_smt:
+            sib_hs = sib_df["high"].reindex(df.index, method="ffill")
+            sib_ls = sib_df["low"].reindex(df.index, method="ffill")
+            sd_hi, sd_lo = sib_hs.groupby(tdays).max(), sib_ls.groupby(tdays).min()
+            son_hi = sib_hs[on_mask].groupby(tdays[on_mask]).max()
+            son_lo = sib_ls[on_mask].groupby(tdays[on_mask]).min()
+            spdh_arr = _np.array([sd_hi.get(prev.get(d), _np.nan) for d in tdays])
+            spdl_arr = _np.array([sd_lo.get(prev.get(d), _np.nan) for d in tdays])
+            sonh_arr = _np.where(usable, _np.array([son_hi.get(d, _np.nan) for d in tdays]), _np.nan)
+            sonl_arr = _np.where(usable, _np.array([son_lo.get(d, _np.nan) for d in tdays]), _np.nan)
     # Full swing list precomputed; lookahead is avoided at use time via the
     # confirmation lag inside nearest_liquidity_target() / the sweep check.
     swings = find_swings(df, swing_strength) if (use_liquidity or require_sweep) else []
@@ -188,6 +219,7 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
 
     setups: list[PendingSetup] = []
     position: Position | None = None
+    cur_tday, opened_today = None, 0     # plafond de trades par jour de trading
     rows: list[dict] = []
     result = BacktestResult(trades=pd.DataFrame(), params={}, n_bars=len(df),
                             start=df.index[0], end=df.index[-1])
@@ -232,6 +264,38 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
         levels = [pdl_arr[f.created_idx], onl_arr[f.created_idx]]
         seg = l_arr[win_lo:f.created_idx + 1]
         return any((not _np.isnan(lv)) and seg.min() < lv for lv in levels)
+
+    def smt_divergent(f: FVG) -> bool:
+        """Divergence SMT à la Dodgy : NQ vient de balayer SON niveau de
+        session ; il y a divergence si ES n'a PAS balayé le sien (même fenêtre,
+        mêmes niveaux PDH/PDL + overnight). En sweep_mode="swing", repli sur la
+        comparaison de fenêtres. Données ES manquantes -> permissif."""
+        import numpy as _np
+        i = f.created_idx
+        lo = max(0, i - smt_lookback)
+        if sweep_mode == "session" and spdh_arr is not None:
+            want_high = f.ifvg_direction == Direction.BEARISH
+            levels = ([spdh_arr[i], sonh_arr[i]] if want_high
+                      else [spdl_arr[i], sonl_arr[i]])
+            levels = [lv for lv in levels if not _np.isnan(lv)]
+            seg = (sib_h if want_high else sib_l)[lo:i + 1]
+            if not levels or _np.isnan(seg).all():
+                return True
+            if want_high:                       # ES a-t-il balayé son niveau ?
+                swept_sib = any(_np.nanmax(seg) > lv for lv in levels)
+            else:
+                swept_sib = any(_np.nanmin(seg) < lv for lv in levels)
+            return not swept_sib                # pas balayé = divergence = GO
+        prior_lo = max(0, i - 2 * smt_lookback)
+        if f.ifvg_direction == Direction.BEARISH:
+            win, prior = sib_h[lo:i + 1], sib_h[prior_lo:lo]
+            if len(prior) == 0 or _np.isnan(win).all() or _np.isnan(prior).all():
+                return True
+            return _np.nanmax(win) <= _np.nanmax(prior)
+        win, prior = sib_l[lo:i + 1], sib_l[prior_lo:lo]
+        if len(prior) == 0 or _np.isnan(win).all() or _np.isnan(prior).all():
+            return True
+        return _np.nanmin(win) >= _np.nanmin(prior)
 
     def v_shape(f: FVG) -> bool:
         """User's model: a sharp V-shape reversal into the inversion, not a slow
@@ -292,6 +356,9 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
                 return None
         if require_vshape and not v_shape(f):
             result.skipped_no_vshape += 1
+            return None
+        if require_smt and not smt_divergent(f):
+            result.skipped_no_smt += 1
             return None
         if f.ifvg_direction == Direction.BEARISH:
             if inv_ohlc is not None:                 # enter at the inversion close
@@ -363,6 +430,9 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
     for i in range(len(df)):
         ts = times[i]
         o, h, l, c = o_arr[i], h_arr[i], l_arr[i], c_arr[i]
+        tday = (ts + pd.Timedelta(hours=6)).date()   # jour de trading CME
+        if tday != cur_tday:
+            cur_tday, opened_today = tday, 0
 
         # ---- 1) manage open position (exits before anything else) -------
         if position is not None:
@@ -431,6 +501,10 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
                     if position is not None:
                         result.skipped_position_busy += 1
                         continue
+                    if max_per_day and opened_today >= max_per_day:
+                        result.skipped_daily_cap += 1
+                        continue
+                    opened_today += 1
                     position = Position(stp, ts, i, kz.label(ts), in_zone_news,
                                         cur_stop=stp.stop, best=stp.entry)
                 else:
@@ -479,6 +553,10 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str) -> BacktestResult
             if position is not None:
                 result.skipped_position_busy += 1
                 continue
+            if max_per_day and opened_today >= max_per_day:
+                result.skipped_daily_cap += 1
+                continue
+            opened_today += 1
             entry_px = stp.entry + (slip_entry if stp.direction == Direction.BULLISH else -slip_entry)
             stp.entry = entry_px
             position = Position(stp, ts, i, kz.label(ts), in_zone_news,

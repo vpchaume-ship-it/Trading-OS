@@ -62,16 +62,18 @@ def variant_trades(cfg: dict, instrument: str,
     Retourne (rows_stats, {variante: trades DataFrame}) — les flux de trades
     servent au walk-forward (la sélection par fold se fait ensuite en pandas
     pur, sans relancer le moteur : les variantes sont indépendantes du fold)."""
-    from trading_os.webapp.stats import select_backtest_df
-    df, tf, _ = select_backtest_df(instrument, directory)
+    from trading_os.webapp.stats import load_smt_sibling, select_backtest_df
+    months = cfg.get("backtest", {}).get("history_months")
+    df, tf, _ = select_backtest_df(instrument, directory, months=months)
     if df is None:
         return [], {}
+    sib = load_smt_sibling(cfg, instrument, directory)
     rows, streams = [], {}
     for name, patch in VARIANTS:
         c = copy.deepcopy(cfg)
         c["ifvg"]["timeframe"] = tf
         apply_patch(c, patch)
-        res = run_backtest(df, c, instrument)
+        res = run_backtest(df, c, instrument, sib_df=sib)
         s = summary(res.trades)
         rows.append({"variant": name, "instrument": instrument, "tf": tf, **s})
         streams[name] = res.trades

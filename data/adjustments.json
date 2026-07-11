@@ -1,7 +1,5 @@
 {
-  "active": {
-    "risk_scale": 0.5
-  },
+  "active": {},
   "history": [
     {
       "date": "2026-07-11",
@@ -10,9 +8,11 @@
       "to": 0.5,
       "reason": "réduction du risque en drawdown (protection du capital, jamais l'inverse)",
       "evidence": "DD 30j -5.2 R · 10 derniers trades +20.9 R",
-      "status": "active",
+      "status": "annulé",
       "n_at_adoption": 20,
-      "exp_at_adoption": 1.567
+      "exp_at_adoption": 1.567,
+      "revert_date": "2026-07-11",
+      "revert_reason": "drawdown résorbé (nouveau plus-haut d'equity)"
     }
   ]
 }

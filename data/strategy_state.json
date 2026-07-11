@@ -1,5 +1,5 @@
 {
-  "chosen_at": "2026-07-11T14:51:45",
+  "chosen_at": "2026-07-11T19:42:38",
   "guards": {
     "min_trades": 10,
     "min_expectancy": 0.1,
@@ -12,7 +12,7 @@
         "entry_timing": "inversion_close",
         "exit_mode": "full"
       },
-      "reason": "22 trades · WR 36% · +1.58 R/trade · PF 3.39"
+      "reason": "config PRÉ-ENREGISTRÉE le 2026-07-11 — 25 trades · WR 40% · +1.38 R · PF 3.21"
     }
   }
 }

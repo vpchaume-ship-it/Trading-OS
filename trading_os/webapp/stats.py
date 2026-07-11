@@ -41,10 +41,23 @@ def select_backtest_df(instrument: str, directory: str = "data",
     return None, None, None
 
 
+def load_smt_sibling(cfg: dict, instrument: str, directory: str = "data"):
+    """Frère SMT (ES pour NQ) sur la même fenêtre — None si non requis/absent."""
+    if not cfg["ifvg"].get("setup", {}).get("require_smt", False):
+        return None
+    sib_name = cfg.get("premarket", {}).get("smt_reference")
+    if not sib_name or sib_name == instrument:
+        return None
+    months = cfg.get("backtest", {}).get("history_months")
+    sib, _, _ = select_backtest_df(sib_name, directory, months=months)
+    return sib
+
+
 def dashboard_backtest(cfg: dict, instrument: str, directory: str = "data",
                        patch: dict | None = None) -> dict | None:
     """patch = auto-tuned ifvg overrides chosen by insights.select_strategy."""
-    df, tf, source = select_backtest_df(instrument, directory)
+    months = cfg.get("backtest", {}).get("history_months")
+    df, tf, source = select_backtest_df(instrument, directory, months=months)
     if df is None:
         return None
 
@@ -52,7 +65,8 @@ def dashboard_backtest(cfg: dict, instrument: str, directory: str = "data",
     cfg2 = copy.deepcopy(cfg)
     cfg2["ifvg"]["timeframe"] = tf
     apply_patch(cfg2, patch or {})
-    result = run_backtest(df, cfg2, instrument)
+    result = run_backtest(df, cfg2, instrument,
+                          sib_df=load_smt_sibling(cfg2, instrument, directory))
     if result.trades.empty:
         return {"tf": tf, "n_bars": len(df), "start": df.index[0], "end": df.index[-1],
                 "source": source, "stats": {"n_trades": 0}, "trades": result.trades,

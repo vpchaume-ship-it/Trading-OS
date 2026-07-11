@@ -542,9 +542,22 @@ def backtest_section(cfg: dict, state: dict, bt: dict) -> str:
                        f'<thead><tr><th></th><th>trades</th><th>WR</th><th>R moy</th>'
                        f'</tr></thead><tbody>{rows}</tbody></table></div>')
 
-        auto_line = (f'<p class="autotune">⚙ Réglage auto : '
+        auto_line = (f'<p class="autotune">⚙ Réglage : '
                      f'<strong>{html.escape(sel["variant"])}</strong> — '
                      f'{html.escape(sel["reason"])}</p>')
+        reg_on = cfg["backtest"].get("registered_on")
+        if reg_on and not d["trades"].empty:
+            t = d["trades"]
+            fwd = t[pd.to_datetime(t["exit_time"]) >= pd.Timestamp(reg_on, tz="America/New_York")]
+            if len(fwd):
+                fr = fwd["net_r"]
+                auto_line += (f'<p class="autotune">🔒 VRAI hors-échantillon depuis le gel '
+                              f'({reg_on}) : {len(fwd)} trades · {fr.sum():+.1f} R · '
+                              f'WR {(fr > 0).mean():.0%}</p>')
+            else:
+                auto_line += (f'<p class="autotune">🔒 Config gelée le {reg_on} — chaque '
+                              f'nouveau jour de marché est du VRAI hors-échantillon '
+                              f'(0 trade depuis le gel pour l\'instant).</p>')
         blocks.append(f"""
 <section class="card">
   <header class="card-head"><h2>{name}</h2><span class="price">{meta}</span></header>
@@ -623,11 +636,29 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
             try:
                 rows, streams = variant_trades(cfg, name)
                 variant_rows += rows
-                wf[name] = walk_forward(streams, name)
+                wcfg = cfg["backtest"].get("walkforward", {})
+                wf[name] = walk_forward(streams, name,
+                                        train_days=wcfg.get("train_days", 30),
+                                        test_days=wcfg.get("test_days", 10))
             except Exception:
                 wf[name] = None
         state = {name: select_strategy(variant_rows, name)
                  for name in cfg["premarket"]["instruments"]}
+        # PRÉ-ENREGISTREMENT : la config gelée prime sur la sélection du jour
+        # (anti-biais de sélection ; la grille reste calculée pour information).
+        reg = cfg["backtest"].get("registered_variant")
+        if reg:
+            from trading_os.webapp.insights import PATCHES
+            for name in state:
+                row = next((r for r in variant_rows
+                            if r["instrument"] == name and r["variant"] == reg), None)
+                why = (f"{row['n_trades']} trades · WR {row['win_rate']:.0%} · "
+                       f"{row['expectancy_r']:+.2f} R · PF {min(row['profit_factor'], 99):.2f}"
+                       if row and row.get("n_trades") else "")
+                state[name] = {"variant": reg, "patch": PATCHES.get(reg, {}),
+                               "reason": ("config PRÉ-ENREGISTRÉE le "
+                                          f"{cfg['backtest'].get('registered_on', '?')} — "
+                                          + why)}
         save_state(state)
         from trading_os.backtest.walkforward import save_results
         save_results(wf)
@@ -684,6 +715,15 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
         try:
             from trading_os.webapp.insights import append_history
             append_history(state, bt)      # trace quotidienne de l'auto-réglage
+        except Exception:
+            pass
+        try:                               # corpus « discrétion » (wiki/journal/)
+            inst0_ = cfg["premarket"]["instruments"][0]
+            if bt.get(inst0_) is not None and not bt[inst0_]["trades"].empty:
+                bt[inst0_]["trades"].to_csv("data/trades_current.csv", index=False)
+                import subprocess, sys as _sys
+                subprocess.run([_sys.executable, "wiki/generate_journal.py"],
+                               timeout=60, check=False)
         except Exception:
             pass
     backtest_html = backtest_section(cfg, state, bt)

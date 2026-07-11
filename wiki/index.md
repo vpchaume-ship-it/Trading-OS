@@ -16,6 +16,7 @@ updated: 2026-07-09
 - [[Failed Ideas/ledger|Failed Ideas]] — tableau des idées abandonnées + raison. **À lire avant tout travail.**
 
 ## Expériences (backtests / variantes de stratégie)
+- [[experiences/2026-07-preenregistrement-dodgy|Pré-enregistrement Dodgy]] — **CONFIG GELÉE** : clôture inversion + 1 trade/jour ; 25 tr · 40 % WR · +1.38 R · PF 3.21 (24 mois).
 - [[experiences/2026-07-sweep-session-vshape|Sweep session + V-shape]] — le modèle utilisateur ; WR 32 % → 47 % sur NQ. **Config retenue.**
 - [[experiences/2026-07-entree-inversion-vs-retest|Entrée inversion vs retest]] — l'entrée agressive de Dodgy backteste moins bien que le retest.
 - [[experiences/2026-06-scale-out|Prise partielle (scale-out)]] — moitié à +1R → BE ; remonte le WR en restant rentable.
@@ -28,6 +29,9 @@ updated: 2026-07-09
 - [[concepts/walk-forward|Walk-forward]] — validation hors échantillon glissante ; LA stat de référence du dashboard.
 - [[concepts/boucle-auto-ajustement|Boucle d'auto-ajustement]] — feedback quotidien sur les paramètres secondaires, socle gelé, garde-fous durs.
 - [[concepts/rating-bougie|Rating de bougie /10]] — note d'inversion (A+..F) ; remplacé par les filtres de contexte.
+
+## Journal (auto-généré — corpus « discrétion »)
+- `journal/` — une page par jour tradé (config gelée), annotations « Lecture » en session.
 
 ## Recherche (sources externes ingérées)
 - [[research/methode-dodgy|Méthode Dodgy (DodgysDD)]] — étude publique de son modèle NQ.

@@ -50,9 +50,10 @@ ifvg:
   retest_entry: "proximal"   # proximal / midpoint / distal (bord d'entrée dans la zone inversée, si entry_timing=retest)
   # Timing d'entrée : inversion_close = au marché sur la clôture de la bougie qui
   # inverse le FVG (méthode Dodgy) ; retest = ordre limite au retest de la zone.
-  entry_timing: "retest"
+  entry_timing: "inversion_close"
   stop_buffer_ticks: 2       # buffer au-delà du bord opposé de la zone pour le stop
   max_retests_per_zone: 1    # nombre d'entrées autorisées par zone inversée
+  max_trades_per_day: 1      # discipline Dodgy : LE setup du jour, pas trois
   allowed_killzones: ["ny_am"]   # conforme aux PDF : 9:30-11:30 NY uniquement
   # Critères de contexte A+ (méthode Dodgy) — filtres de qualité du SETUP,
   # pas seulement de la bougie d'inversion :
@@ -71,6 +72,10 @@ ifvg:
     require_vshape: true
     vshape_max_bars: 8       # le V doit se former en ≤ N barres
     vshape_min_move_ticks: 20  # amplitude minimale du renversement (ticks)
+    # SMT en filtre BLOQUANT : abandonné (Failed Ideas 2026-07-11) — exiger
+    # qu'ES échoue sur son niveau pendant que NQ balaye le sien ne laisse que
+    # 4-11 trades/24 mois. Le code reste disponible pour l'expérimentation.
+    require_smt: false
     require_pd: true         # long en discount / short en premium de la range récente
     pd_lookback: 60          # fenêtre (barres) pour la range premium/discount
   # Notation de la bougie d'inversion (PDF Candle Closure Ratings) :
@@ -86,7 +91,7 @@ ifvg:
   # l'extrême favorable ; scale = prise partielle (moitié à +1R, reste au
   # break-even jusqu'à la cible) — mécanique de Dodgy, remonte le win rate.
   exit:
-    mode: "scale"            # full / be / trail / scale (scale = prise partielle, pour le win rate au retest)
+    mode: "full"             # full / be / trail / scale
     be_trigger_rr: 1.0       # +1R : déclenche BE (be/trail) ou la prise partielle (scale)
     trail_rr: 1.0            # distance du stop suiveur (en R)
   target:
@@ -100,6 +105,18 @@ ifvg:
 
 backtest:
   instrument: "NQ"
+  history_months: 24         # fenêtre glissante du backtest (24 max) — l'échantillon
+                             # doit nourrir le walk-forward, pas flatter la courbe
+  walkforward:
+    train_days: 120          # cadence sniper : ~8-10 trades par train
+    test_days: 30
+  # PRÉ-ENREGISTREMENT (anti-biais de sélection) : config gelée le 2026-07-11.
+  # À partir de cette date, chaque nouveau jour de marché est du VRAI
+  # hors-échantillon — c'est la validation de référence, le walk-forward
+  # rétrospectif étant non conclusif à cette cadence (signe instable selon le
+  # calibrage des plis, ~18 trades OOS).
+  registered_on: "2026-07-11"
+  registered_variant: "Sweep session + V-shape (clôture inversion)"
   contract: "mini"           # mini / micro — impacte tick_value et commissions
   csv_file: ""               # chemin du CSV 1m ; vide = demandé dans le menu
   eod_flat_time: "16:55"     # clôture forcée des positions avant la fermeture (heure NY)
