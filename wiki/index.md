@@ -25,6 +25,7 @@ updated: 2026-07-09
 - [[concepts/sweep-de-liquidite|Sweep de liquidité]] — swing vs niveau de session (PDH/PDL/overnight).
 - [[concepts/v-shape|V-shape]] — renversement franc post-sweep ; le filtre le plus payant à ce jour.
 - [[concepts/killzone|Killzone]] — fenêtre 9:30–11:30 NY, seule autorisée.
+- [[concepts/walk-forward|Walk-forward]] — validation hors échantillon glissante ; LA stat de référence du dashboard.
 - [[concepts/boucle-auto-ajustement|Boucle d'auto-ajustement]] — feedback quotidien sur les paramètres secondaires, socle gelé, garde-fous durs.
 - [[concepts/rating-bougie|Rating de bougie /10]] — note d'inversion (A+..F) ; remplacé par les filtres de contexte.
 

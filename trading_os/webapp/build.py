@@ -322,6 +322,107 @@ def evolution_block(name: str) -> str:
             f'<tbody>{rows}</tbody></table></div>')
 
 
+def wf_section(wf: dict, instruments: list[str]) -> str:
+    """Vitrine : métriques 100 % OUT-OF-SAMPLE du walk-forward (30 j de
+    sélection -> 10 j de test figé, fenêtre glissante). C'est le rendement
+    « jamais vu par l'optimisation » — la seule stat qui compte."""
+    blocks = []
+    for name in instruments:
+        r = wf.get(name)
+        if not r or r["stats"].get("n_trades", 0) == 0:
+            blocks.append(f'<section class="card"><header class="card-head">'
+                          f'<h2>{name}</h2></header><p class="empty">Walk-forward : '
+                          f'pas encore assez d\'historique pour un pli complet '
+                          f'(30 j train + 10 j test) — la fenêtre grandit chaque jour.'
+                          f'</p></section>')
+            continue
+        s = r["stats"]
+        def signed(v, fmt):
+            cls = "pos" if v > 0 else "neg"
+            return f'<span class="kval {cls}">{v:{fmt}}</span>'
+        n_folds = len(r["folds"])
+        n_traded = sum(1 for f in r["folds"] if not f.get("fallback"))
+        kpis = f"""
+  <div class="kpis">
+    <div class="kpi"><span class="klab">Espérance OOS</span>{signed(s["expectancy_r"], "+.2f")}<span class="ksub">R net / trade</span></div>
+    <div class="kpi"><span class="klab">Win rate OOS</span><span class="kval">{s["win_rate"]:.0%}</span><span class="ksub">{s["n_trades"]} trades</span></div>
+    <div class="kpi"><span class="klab">Profit factor</span><span class="kval">{min(s["profit_factor"], 99):.2f}</span><span class="ksub">OOS</span></div>
+    <div class="kpi"><span class="klab">Total OOS</span>{signed(s["total_r"], "+.1f")}<span class="ksub">DD max {s["max_drawdown_r"]:.1f} R</span></div>
+  </div>"""
+        eq = equity_svg(r["trades"], f"wf-{name}") if s["n_trades"] >= 2 else ""
+        rows = "".join(
+            f'<tr><td>{str(f["test_start"])[5:10]}</td>'
+            f'<td class="vname">{html.escape(str(f["variant"]))[:34]}</td>'
+            f'<td class="num">{f["n_test"]}</td>'
+            f'<td class="num">{f["test_total_r"]:+.1f}</td></tr>'
+            for f in r["folds"][-8:][::-1])
+        folds_html = ('<h3>Plis récents (variante figée → résultat test)</h3>'
+                      '<div class="scroll"><table class="fvg"><thead><tr>'
+                      '<th>test</th><th>variante (choisie sur train)</th>'
+                      '<th>n</th><th>R</th></tr></thead>'
+                      f'<tbody>{rows}</tbody></table></div>')
+        blocks.append(f"""
+<section class="card">
+  <header class="card-head"><h2>{name}</h2>
+    <span class="price">{n_folds} plis · {n_traded} tradés · sélection 30 j → test 10 j figé</span>
+    <span class="pill bull">100 % HORS ÉCHANTILLON</span></header>
+  {kpis}
+  <h3>Equity out-of-sample (R cumulés, coûts inclus)</h3>
+  {eq}
+  {folds_html}
+</section>""")
+    note = ('<p class="empty">Chaque pli : la variante est choisie sur 30 jours '
+            'puis appliquée FIGÉE sur les 10 jours suivants — les métriques '
+            'ci-dessus n\'ont jamais été vues par la sélection. Les plis '
+            '« prudence » (aucune variante défendable sur le train) ne tradent pas.</p>')
+    return "".join(blocks) + note
+
+
+def risk_section(cfg: dict, wf: dict, bt: dict, fb: dict,
+                 instruments: list[str]) -> str:
+    """Risque profil sniper : maths des séries perdantes au WR réel (OOS)."""
+    from trading_os.backtest import risklab
+    blocks = []
+    rules = cfg.get("propfirm", {})
+    budget = float(rules.get("max_loss_limit", 2000))
+    for name in instruments:
+        r = wf.get(name)
+        stats = (r or {}).get("stats", {})
+        if stats.get("n_trades", 0) >= 8:
+            wr, src = stats["win_rate"], "WR out-of-sample"
+        else:
+            d = bt.get(name)
+            if not d or d["stats"].get("n_trades", 0) < 8:
+                continue
+            wr, src = d["stats"]["win_rate"], "WR in-sample (OOS trop mince)"
+        rec = risklab.recommended_risk_usd(wr, budget)
+        scale = fb.get("active", {}).get("risk_scale", 1.0)
+        eff = max(risklab.RISK_FLOOR_USD, round(rec["risk_usd"] * scale / 5) * 5)
+        live = bt.get(name)
+        al = risklab.streak_alert(live["trades"] if live is not None else None, wr)
+        meta = {"ok": ("bull", "✓ SÉRIE NORMALE"),
+                "attention": ("warn", "⚠ SÉRIE ÉLEVÉE"),
+                "alerte": ("bear", "⛔ SÉRIE > P99 — MODÈLE À RE-VALIDER")}[al["level"]]
+        blocks.append(f"""
+<section class="card">
+  <header class="card-head"><h2>{name}</h2>
+    <span class="price">{src} : {wr:.0%} · budget {budget:,.0f} $ (MLL)</span>
+    <span class="pill {meta[0]}">{meta[1]}</span></header>
+  <div class="kpis">
+    <div class="kpi"><span class="klab">Risque / trade</span><span class="kval">{eff:,.0f} $</span><span class="ksub">{eff / 50000:.2%} du compte{' · réduit ' + f'{scale:g}×' if scale < 1 else ''}</span></div>
+    <div class="kpi"><span class="klab">Série p99 (100 trades)</span><span class="kval">{rec["streak_p99"]}</span><span class="ksub">pertes consécutives</span></div>
+    <div class="kpi"><span class="klab">Survie</span><span class="kval">{rec["survives"]}</span><span class="ksub">pertes avant MLL</span></div>
+    <div class="kpi"><span class="klab">Série en cours</span><span class="kval">{al["current"]}</span><span class="ksub">attendu ≈ {al["expected_max"]:.0f} · p99 {al["p99"]}</span></div>
+  </div>
+  <p class="empty">Profil « sniper » assumé : WR bas, gains larges. Le sizing garantit
+  d'encaisser ≥ {risklab.SURVIVE_STREAK_MIN} pertes d'affilée en ne consommant que
+  {risklab.BUDGET_FRACTION:.0%} du budget — plafond dur {risklab.HARD_RISK_CAP_USD:,.0f} $
+  (0.5 %), jamais dépassé.</p>
+</section>""".replace(",", " "))
+    return "".join(blocks) or ('<section class="card"><p class="empty">Pas assez '
+                               'de trades pour calibrer le risque.</p></section>')
+
+
 FB_LABELS = {"risk_scale": "Taille de position", "entry_window": "Fenêtre d'entrée",
              "stop_buffer_ticks": "Buffer du stop", "liquidity_min_rr": "Plancher RR"}
 
@@ -514,17 +615,26 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
     # auto-tune : la grille complète ne tourne qu'au build QUOTIDIEN ; en
     # intraday on rejoue le choix persisté du matin (anti-overfitting).
     variant_rows: list[dict] = []
+    wf: dict[str, dict | None] = {}
     if autotune:
+        from trading_os.backtest.walkforward import walk_forward
+        from trading_os.webapp.insights import variant_trades
         for name in cfg["premarket"]["instruments"]:
             try:
-                variant_rows += run_variants(cfg, name)
+                rows, streams = variant_trades(cfg, name)
+                variant_rows += rows
+                wf[name] = walk_forward(streams, name)
             except Exception:
-                pass
+                wf[name] = None
         state = {name: select_strategy(variant_rows, name)
                  for name in cfg["premarket"]["instruments"]}
         save_state(state)
+        from trading_os.backtest.walkforward import save_results
+        save_results(wf)
     else:
+        from trading_os.backtest.walkforward import load_results
         from trading_os.webapp.insights import saved_state
+        wf = load_results()                       # OOS du matin, affiché tel quel
         state = saved_state(cfg["premarket"]["instruments"])
     # run the auto-tuned backtest ONCE; reused by the backtest section
     bt: dict[str, dict | None] = {}
@@ -577,6 +687,8 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
         except Exception:
             pass
     backtest_html = backtest_section(cfg, state, bt)
+    wf_html = wf_section(wf, cfg["premarket"]["instruments"])
+    risk_html = risk_section(cfg, wf, bt, fb, cfg["premarket"]["instruments"])
     adjust_html = adjustments_section(fb, review, bt_base, bt,
                                       cfg["premarket"]["instruments"])
     if autotune:
@@ -922,7 +1034,11 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
   <div class="eyebrow">// Biais &amp; niveaux — D · 4H · 1H</div>
   <div class="grid2">{instruments_html}</div>
 
-  <div class="eyebrow">// Backtest IFVG — stats évolutives (setups A/A+ uniquement)</div>
+  <div class="eyebrow">// Validation walk-forward — le rendement HORS échantillon</div>
+  <div class="grid2">{wf_html}</div>
+  <div class="eyebrow">// Risque — profil sniper (séries perdantes au WR réel)</div>
+  <div class="grid2">{risk_html}</div>
+  <div class="eyebrow">// Backtest IFVG — config auto-réglée (in-sample, pour contexte)</div>
   <div class="grid2">{backtest_html}</div>
 
   <div class="eyebrow">// Auto-ajustement — boucle de feedback (socle gelé)</div>

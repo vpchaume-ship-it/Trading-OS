@@ -148,7 +148,7 @@ propfirm:
   min_days: 1                   # Pro : passable en 1 jour
   consistency_pct: 0            # Pro : pas de règle de consistance en éval
   max_micros: 40                # 4 minis ES ou 40 micros
-  risk_per_trade_usd: 200       # sizing simulé en micros
+  risk_per_trade_usd: 125       # profil sniper : 0.25 % — voir backtest/risklab.py
 
 premarket:
   instruments: ["NQ"]      # NQ uniquement

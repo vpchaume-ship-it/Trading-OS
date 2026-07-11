@@ -56,12 +56,17 @@ def apply_patch(cfg: dict, patch: dict) -> None:
             cfg["ifvg"][k] = v
 
 
-def run_variants(cfg: dict, instrument: str, directory: str = "data") -> list[dict]:
+def variant_trades(cfg: dict, instrument: str,
+                   directory: str = "data") -> tuple[list[dict], dict]:
+    """Une passe moteur PAR VARIANTE sur tout l'historique sélectionné.
+    Retourne (rows_stats, {variante: trades DataFrame}) — les flux de trades
+    servent au walk-forward (la sélection par fold se fait ensuite en pandas
+    pur, sans relancer le moteur : les variantes sont indépendantes du fold)."""
     from trading_os.webapp.stats import select_backtest_df
     df, tf, _ = select_backtest_df(instrument, directory)
     if df is None:
-        return []
-    rows = []
+        return [], {}
+    rows, streams = [], {}
     for name, patch in VARIANTS:
         c = copy.deepcopy(cfg)
         c["ifvg"]["timeframe"] = tf
@@ -69,7 +74,12 @@ def run_variants(cfg: dict, instrument: str, directory: str = "data") -> list[di
         res = run_backtest(df, c, instrument)
         s = summary(res.trades)
         rows.append({"variant": name, "instrument": instrument, "tf": tf, **s})
-    return rows
+        streams[name] = res.trades
+    return rows, streams
+
+
+def run_variants(cfg: dict, instrument: str, directory: str = "data") -> list[dict]:
+    return variant_trades(cfg, instrument, directory)[0]
 
 
 # ------------------------------------------------------------ auto-tune
@@ -98,7 +108,7 @@ def select_strategy(rows: list[dict], instrument: str) -> dict:
     # (les garde-fous ci-dessus garantissent déjà la rentabilité). Départage
     # par l'espérance puis le profit factor.
     best = max(cand, key=lambda r: (r["win_rate"], r["expectancy_r"], r["profit_factor"]))
-    return {"variant": best["variant"], "patch": PATCHES[best["variant"]],
+    return {"variant": best["variant"], "patch": PATCHES.get(best["variant"], {}),
             "reason": (f"{best['n_trades']} trades · WR {best['win_rate']:.0%} · "
                        f"{best['expectancy_r']:+.2f} R/trade · PF {best['profit_factor']:.2f}")}
 

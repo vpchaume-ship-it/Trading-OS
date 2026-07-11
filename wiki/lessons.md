@@ -30,6 +30,10 @@ sur plusieurs expériences. Détails et chiffres dans les pages d'expérience li
    l'entrée inversion, fills sur barre de reclaim) a fait passer le retest+
    partielle de 41 % WR/+1.02 R à 23 %/+0.13 R sur la même fenêtre. Un
    backtest sans friction réaliste flatte, il n'informe pas.
-7. **Les garde-fous d'auto-réglage sont vitaux.** Sans min_trades/expectancy/PF,
+7. **L'in-sample ment même quand le moteur est honnête.** Walk-forward
+   2026-07-11 (12 mois, moteur post-audit) : +0.9 R in-sample → **-0.45 R
+   out-of-sample** (10 trades, PF 0.52). La sélection de variante capte du
+   bruit ; seul le rendement hors échantillon compte désormais.
+8. **Les garde-fous d'auto-réglage sont vitaux.** Sans min_trades/expectancy/PF,
    l'auto-tune choisit du bruit (il avait rétrogradé NQ vers une config à 24 %
    WR non voulue).

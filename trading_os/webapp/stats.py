@@ -17,17 +17,21 @@ from trading_os.data.deep import load_deep
 
 MIN_1M_BARS = 5_000    # ~1 semaine de séance 1m — dès qu'on l'a, le 1m prime
                        # (timeframe d'exécution fidèle à la méthode Dodgy)
-DEEP_CAP = 95_000      # ~4 mois de 1m : borne le temps de build (~10 s/run)
+HISTORY_MONTHS = 12    # fenêtre glissante par DATE (12-24 mois) — l'échantillon
+                       # de trades doit être assez large pour le walk-forward
 
 
-def select_backtest_df(instrument: str, directory: str = "data"):
+def select_backtest_df(instrument: str, directory: str = "data",
+                       months: int | None = None):
     """Best available execution frame: deep Dukascopy 1m > Yahoo 1m > Yahoo 5m.
     Returns (df, timeframe_str, source_label) or (None, None, None)."""
+    import pandas as pd
+    months = months or HISTORY_MONTHS
     deep = load_deep(instrument, directory)
     if deep is not None and len(deep) >= MIN_1M_BARS:
-        if len(deep) > DEEP_CAP:
-            deep = deep.tail(DEEP_CAP)
-        return deep, "1min", "Dukascopy 1m (historique profond)"
+        cutoff = deep.index[-1] - pd.DateOffset(months=min(months, 24))
+        deep = deep[deep.index >= cutoff]
+        return deep, "1min", f"Dukascopy 1m ({min(months, 24)} mois glissants)"
     y1 = load_accumulated(Path(directory) / f"yahoo_{instrument}_1m.csv")
     if y1 is not None and len(y1) >= MIN_1M_BARS:
         return y1, "1min", "Yahoo 1m"
