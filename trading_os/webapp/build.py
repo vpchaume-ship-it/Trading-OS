@@ -137,10 +137,12 @@ def ladder_html(levels: list[tuple[str, float]], price: float) -> str:
     return "".join(out)
 
 
-def instrument_card(d: dict) -> str:
+def instrument_card(d: dict, ref_only: bool = False) -> str:
     # header pill = combined D bias from the multi-TF matrix
     d_bias = next(m for m in d["matrix"] if m.tf == "D")
     cls, glyph, label = BIAS_META[d_bias.bias]
+    ref_pill = ('<span class="pill warn">RÉF. SMT — NON TRADÉ</span>'
+                if ref_only else '')
 
     tf_pills, sig_rows = [], []
     for m in d["matrix"]:
@@ -168,6 +170,7 @@ def instrument_card(d: dict) -> str:
   <header class="card-head">
     <h2>{d["name"]}</h2>
     <span class="price num">{px(d["price"])}</span>
+    {ref_pill}
     <span class="pill {cls}">{glyph} {label}</span>
   </header>
   {tf_html}
@@ -727,10 +730,11 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
         fetch_names.append(smt_ref)
     frames = {name: fetch_frames(name) for name in fetch_names}
     cards, asof, heros = [], None, []
-    for name in cfg["premarket"]["instruments"]:
+    traded = list(cfg["premarket"]["instruments"])
+    for name in fetch_names:              # NQ (tradé) puis ES (référence SMT)
         d = instrument_data(name, cfg, frames)
         if d:
-            cards.append(instrument_card(d))
+            cards.append(instrument_card(d, ref_only=name not in traded))
             asof = d["asof"]
             d_bias = next(m for m in d["matrix"] if m.tf == "D")
             heros.append({"name": name, "price": d["price"], "bias": d_bias.bias})
