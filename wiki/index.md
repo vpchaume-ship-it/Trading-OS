@@ -27,6 +27,7 @@ updated: 2026-07-09
 - [[concepts/v-shape|V-shape]] — renversement franc post-sweep ; le filtre le plus payant à ce jour.
 - [[concepts/killzone|Killzone]] — fenêtre 9:30–11:30 NY, seule autorisée.
 - [[concepts/walk-forward|Walk-forward]] — validation hors échantillon glissante ; LA stat de référence du dashboard.
+- [[concepts/ecole-des-presque|École des presque]] — mesure ce que le socle rejette de peu ; unité de promotion sur évidence, socle jamais touché.
 - [[concepts/boucle-auto-ajustement|Boucle d'auto-ajustement]] — feedback quotidien sur les paramètres secondaires, socle gelé, garde-fous durs.
 - [[concepts/rating-bougie|Rating de bougie /10]] — note d'inversion (A+..F) ; remplacé par les filtres de contexte.
 

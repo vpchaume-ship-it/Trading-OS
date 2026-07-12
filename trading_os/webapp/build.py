@@ -325,8 +325,39 @@ def evolution_block(name: str) -> str:
             f'<tbody>{rows}</tbody></table></div>')
 
 
+def nearmiss_html(nm: dict | None) -> str:
+    """École des presque : ce que le socle gelé rejette d'un cheveu, mesuré."""
+    if not nm or not nm.get("cohorts"):
+        return ""
+    rows = ""
+    for co in nm["cohorts"]:
+        s = co["stats"]
+        n = int(s.get("n_trades", 0))
+        if n == 0:
+            rows += (f'<tr><td>{html.escape(co["label"])}</td>'
+                     f'<td class="num">0</td><td class="num">—</td>'
+                     f'<td class="num">—</td><td>—</td></tr>')
+            continue
+        tag = ('<span class="chip bull">candidat</span>' if co["promotable"]
+               else '<span class="chip">à surveiller</span>')
+        exp = s.get("expectancy_r", 0)
+        cls = "pos" if exp > 0 else "neg"
+        rows += (f'<tr><td>{html.escape(co["label"])}</td>'
+                 f'<td class="num">{n}</td>'
+                 f'<td class="num">{s.get("win_rate", 0):.0%}</td>'
+                 f'<td class="num {cls}">{exp:+.2f} R</td><td>{tag}</td></tr>')
+    return (f'<h3>🎓 École des presque (ce que le socle rejette de peu)</h3>'
+            f'<div class="scroll"><table class="fvg"><thead><tr>'
+            f'<th>critère relâché seul</th><th>+trades</th><th>WR</th>'
+            f'<th>espérance</th><th></th></tr></thead><tbody>{rows}</tbody></table></div>'
+            f'<p class="empty">Chaque ligne = les trades AJOUTÉS si on relâchait ce '
+            f'seul critère (les autres restant au niveau gelé). « candidat » = '
+            f'≥ {nm.get("min_trades", 8)} trades et espérance positive : à valider en '
+            f'forward avant toute promotion — le socle reste gelé.</p>')
+
+
 def frozen_section(cfg: dict, state: dict, bt: dict, fb: dict,
-                   review: dict | None) -> str:
+                   review: dict | None, nm: dict | None = None) -> str:
     """LA carte backtest unique : config gelée style Dodgy — forward depuis le
     gel en vedette, référence 24 mois, equity, risque sniper et auto-
     apprentissage intégrés. Remplace les 5 anciennes sections."""
@@ -427,6 +458,7 @@ def frozen_section(cfg: dict, state: dict, bt: dict, fb: dict,
   {equity_svg(t, name)}
   {risk_line}
   {learn}
+  {nearmiss_html(nm) if name == cfg["premarket"]["instruments"][0] else ""}
   {diag}
 </section>""")
     note = ('<p class="empty">Une seule config, gelée le ' + str(reg_on) + ' (pré-'
@@ -773,6 +805,17 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
             bt[name] = dashboard_backtest(cfg, name, patch=state[name]["patch"])
         except Exception:
             bt[name] = None
+    # ---- école des presque : mesure ce que le socle rejette de peu ----
+    from trading_os.backtest import nearmiss
+    inst_nm = cfg["premarket"]["instruments"][0]
+    if autotune:
+        try:
+            nm = nearmiss.analyse(cfg, inst_nm)
+            nearmiss.save(nm)
+        except Exception:
+            nm = None
+    else:
+        nm = nearmiss.load()
     # ---- boucle d'auto-ajustement (paramètres secondaires, socle gelé) ----
     from trading_os.backtest import feedback
     from trading_os.backtest.diagnose import daily_review
@@ -825,7 +868,7 @@ def build_dashboard(cfg: dict, out_path: str | Path, autotune: bool = True) -> P
                                timeout=60, check=False)
         except Exception:
             pass
-    backtest_html = frozen_section(cfg, state, bt, fb, review)
+    backtest_html = frozen_section(cfg, state, bt, fb, review, nm)
 
     try:
         events = fetch_red_folders(cfg)

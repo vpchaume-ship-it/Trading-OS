@@ -31,6 +31,9 @@ class PendingSetup:
     target: float
     risk_ticks: float
     rating: InversionRating | None = None
+    vs_ticks: float | None = None    # amplitude mesurée du V (école des presque)
+    vs_bars: int | None = None
+    tgt_rr: float | None = None      # RR réel vers la cible
 
 
 @dataclass
@@ -44,6 +47,7 @@ class Position:
     best: float = 0.0        # most favorable price reached (completed bars)
     banked_r: float = 0.0    # R already locked by a partial (scale-out)
     frac: float = 1.0        # remaining position fraction after scaling
+    nth_of_day: int = 1      # rang du trade dans son jour (école des presque)
 
 
 @dataclass
@@ -297,12 +301,9 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str,
             return True
         return _np.nanmin(win) >= _np.nanmin(prior)
 
-    def v_shape(f: FVG) -> bool:
-        """User's model: a sharp V-shape reversal into the inversion, not a slow
-        grind. From the swept extreme (the pivot within the lookback window) to the
-        inversion bar the counter-move must cover >= vshape_min_move_ticks within
-        <= vshape_max_bars. Measured on completed bars up to the inversion -> no
-        lookahead."""
+    def vshape_measure(f: FVG) -> tuple[float, int]:
+        """Mesure du V (amplitude ticks, durée barres) — stockée sur chaque trade
+        pour l'école des presque. Barres complètes uniquement, no lookahead."""
         inv = f.inverted_idx if f.inverted_idx is not None else f.created_idx
         win_lo = max(0, inv - (sweep_lookback + vshape_max_bars))
         want_high = f.ifvg_direction == Direction.BEARISH   # short: swept a high, fell
@@ -312,7 +313,10 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str,
         else:
             pivot = win_lo + int(l_arr[win_lo:inv + 1].argmin())   # extreme low
             move_ticks = (c_arr[inv] - l_arr[pivot]) / tick
-        bars = inv - pivot
+        return float(move_ticks), int(inv - pivot)
+
+    def v_shape(f: FVG) -> bool:
+        move_ticks, bars = vshape_measure(f)
         return 0 < bars <= vshape_max_bars and move_ticks >= vshape_min_move_ticks
 
     def in_pd(f: FVG, entry: float) -> bool:
@@ -360,6 +364,7 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str,
         if require_smt and not smt_divergent(f):
             result.skipped_no_smt += 1
             return None
+        vs_ticks, vs_bars = vshape_measure(f)   # mesuré pour l'école des presque
         if f.ifvg_direction == Direction.BEARISH:
             if inv_ohlc is not None:                 # enter at the inversion close
                 # ordre MARCHÉ -> slippage contre nous (audit réalisme 2026-07-11)
@@ -378,6 +383,7 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str,
                     return None
             else:
                 tgt = entry - target_cfg["fixed_rr"] * risk
+            tgt_rr = (entry - tgt) / risk
         else:
             if inv_ohlc is not None:
                 entry = inv_ohlc[3] + slip_stop      # marché : slippage contre nous
@@ -395,10 +401,13 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str,
                     return None
             else:
                 tgt = entry + target_cfg["fixed_rr"] * risk
+            tgt_rr = (tgt - entry) / risk
         if require_pd and not in_pd(f, entry):
             result.skipped_no_pd += 1
             return None
-        return PendingSetup(f, f.ifvg_direction, entry, stop, tgt, risk / tick, rating)
+        return PendingSetup(f, f.ifvg_direction, entry, stop, tgt, risk / tick, rating,
+                            vs_ticks=round(vs_ticks, 1), vs_bars=vs_bars,
+                            tgt_rr=round(tgt_rr, 2))
 
     def close_position(pos: Position, ts, exit_price: float, reason: str):
         s = pos.setup
@@ -425,6 +434,8 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str,
             "inverted_time": s.fvg.inverted_time,
             "rating": s.rating.total if s.rating else None,
             "grade": s.rating.grade if s.rating else None,
+            "vs_ticks": s.vs_ticks, "vs_bars": s.vs_bars, "tgt_rr": s.tgt_rr,
+            "nth_of_day": pos.nth_of_day,
         })
 
     for i in range(len(df)):
@@ -506,7 +517,8 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str,
                         continue
                     opened_today += 1
                     position = Position(stp, ts, i, kz.label(ts), in_zone_news,
-                                        cur_stop=stp.stop, best=stp.entry)
+                                        cur_stop=stp.stop, best=stp.entry,
+                                        nth_of_day=opened_today)
                 else:
                     stp = make_setup(ev.fvg, i, rating)
                     if stp is not None:
@@ -560,7 +572,8 @@ def run_backtest(df: pd.DataFrame, cfg: dict, instrument: str,
             entry_px = stp.entry + (slip_entry if stp.direction == Direction.BULLISH else -slip_entry)
             stp.entry = entry_px
             position = Position(stp, ts, i, kz.label(ts), in_zone_news,
-                                cur_stop=stp.stop, best=entry_px)
+                                cur_stop=stp.stop, best=entry_px,
+                                nth_of_day=opened_today)
             # conservative same-bar stop check
             if stp.direction == Direction.BULLISH and l <= stp.stop:
                 close_position(position, ts, stp.stop - slip_stop, "stop"); position = None

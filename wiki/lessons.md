@@ -40,6 +40,10 @@ sur plusieurs expériences. Détails et chiffres dans les pages d'expérience li
    trancher (gel du 2026-07-11, seuil de jugement ≥ 15 trades).
 9. **La discipline est un edge mesurable.** max_trades_per_day 1 (le setup
    du matin, comme Dodgy) : +0.13 R → +0.50 R sur la même config retest.
+11. **Élargir la cadence se MESURE, ne se décrète pas.** L'école des presque
+   (2026-07-12) isole les trades rejetés d'un cheveu : sur 24 mois, seul le
+   « 2ᵉ setup du jour » ressort candidat (+0.43 R, 9 tr) — bien sous le socle
+   (+1.48 R). On promeut sur évidence forward, pas pour faire du volume.
 10. **Les garde-fous d'auto-réglage sont vitaux.** Sans min_trades/expectancy/PF,
    l'auto-tune choisit du bruit (il avait rétrogradé NQ vers une config à 24 %
    WR non voulue).

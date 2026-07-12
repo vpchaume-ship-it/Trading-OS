@@ -2,3 +2,4 @@ date,instrument,variant,n_trades,win_rate,expectancy_r,profit_factor,total_r
 2026-07-09,NQ,Sweep session + V-shape (retest + prise partielle),30,0.4333,0.9118,2.4452,27.35
 2026-07-10,NQ,Sweep session + V-shape (retest + prise partielle),30,0.4333,0.9118,2.4452,27.35
 2026-07-11,NQ,Sweep session + V-shape (clôture inversion),25,0.4,1.3752,3.2083,34.38
+2026-07-12,NQ,Sweep session + V-shape (clôture inversion),25,0.4,1.3752,3.2083,34.38
