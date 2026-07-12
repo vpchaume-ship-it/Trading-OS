@@ -1,6 +1,6 @@
 <!-- AUTO-GÉNÉRÉ par wiki/update_hot.py — NE JAMAIS ÉDITER À LA MAIN
      (sauf le bloc "Next Actions", préservé entre régénérations). -->
-# État courant — 2026-07-11
+# État courant — 2026-07-12
 
 ## Stratégie auto-réglée
 - Auto-réglage du 2026-07-11T20:00:59
@@ -8,7 +8,6 @@
 
 ## Wiki (4 experiences · 7 concepts · 3 research · 2 reference)
 Entrées récentes du journal :
-- [2026-07-11] bugfix | La fenêtre backtest était FIGÉE au 6/7 (repéré par l'utilisateur sur capture) : la routine du matin n'étendait pas l'historique profond Dukascopy, prioritaire sur Yahoo | refresh_deep("NQ") incrémental branché dans accumulate.main() ; deep 341k barres jusqu'au 10/7, fenêtre glissante 95k confirmée (01/04→10/07) ; autotune re-choisit retest+partielle (27 trades, WR 41 %, +1.02 R, PF 2.54)
 - [2026-07-11] decision | Audit sécurité repo public : AUCUN secret dans les fichiers ni dans tout l'historique (identifiants Tradovate jamais committés, .env jamais versionné, .env.example = placeholders) ; PDFs knowledge/ conservés (contenu non payant, confirmé par l'utilisateur) | reste optionnel : email perso dans les métadonnées d'auteur des commits GitHub
 - [2026-07-11] experience | Boucle d'auto-ajustement livrée : diagnose.py (pourquoi quotidien : tranches horaires/NTZ/RR/stops same-bar/DD) + feedback.py (4 règles evidence-gated ≥8 trades, 1 décision/jour, garde-fous durs codés, anti-overfit auto-revert, expiry 28 j) + fenêtre d'entrée moteur + section dashboard transparente (actifs, socle vs ajusté, historique, diagnostic) | 91 tests verts ; 1er passage : aucun ajustement (pas d'évidence) — comportement attendu
 - [2026-07-11] bugfix | AUDIT QA complet : C1 lookahead niveaux overnight (fenêtre en formation utilisée par ses propres setups + jour calendaire vs jour de trading CME — dimanche soir = « veille » du lundi) ; C2 slippage 0 sur l'entrée marché inversion_close ; M1 fill limite au touch (optimiste) → trade-through strict ; M2 ordre annulé gratuitement sur barre de reclaim → rempli puis stoppé ; M3 anti-overfit feedback mesurait la dérive du marché → comparaison directe ajusté-vs-socle | 99 tests verts ; chiffres corrigés : retest+partielle 41 %→23 % WR (+0.13 R), inversion 25 % WR +0.93 R PF 2.19 retenue par l'autotune — l'edge survit, le WR flatteur était de l'exécution optimiste
@@ -16,6 +15,7 @@ Entrées récentes du journal :
 - [2026-07-11] decision | PRÉ-ENREGISTREMENT (gel de config) : entrée Dodgy clôture inversion + sweep session + V-shape + 1 trade/jour + cible liquidité ≥2R — 24 mois : 25 tr · 40 % WR · +1.38 R · PF 3.21 · DD -4.1 R | SMT bloquante abandonnée (4-11 tr/24 mois) ; sélection quotidienne abandonnée (bruit) ; WF rétrospectif non conclusif → le forward depuis le gel est LA validation ; journal/ auto-généré (25 pages) = corpus discrétion ; 110 tests verts
 - [2026-07-11] decision | Dashboard : les 5 sections backtest (walk-forward, risque, backtest, auto-ajustement, conclusions) fusionnées en UNE carte « config gelée style Dodgy » (demande utilisateur) — forward en vedette, référence 24 mois, equity, risque et auto-apprentissage en lignes intégrées | grille de variantes coupée quand une config est pré-enregistrée : build 6 min 30 → 1 min 22
 - [2026-07-12] decision | Carte de biais ES rétablie après celle de NQ (demande utilisateur), étiquetée « RÉF. SMT — NON TRADÉ » + tuile héro ES | le flux ES était déjà fetché pour la SMT, seul l'affichage manquait ; NQ reste le seul instrument tradé
+- [2026-07-12] experience | Question utilisateur « pourquoi 25 trades/24 mois quand Dodgy en prend 10-20/mois » → entonnoir mesuré : 54 114 inversions IFVG, -74 % sweep session, -9 238 V-shape, -4 677 RR<2, killzone 2 h implicite → 25 ; sweep SWING élargi testé : 26 trades (idem) — le goulot n'est pas le sweep mais V-shape+RR+killzone | la cadence de Dodgy vient des setups que seul son œil qualifie ; mécaniquement, les relâcher dilue l'edge (sans V-shape : 69 tr à +0.18 R, mesuré) — gel maintenu
 
 ## Next Actions
 <!-- next-actions:start -->
