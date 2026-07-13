@@ -1,6 +1,6 @@
 <!-- AUTO-GÉNÉRÉ par wiki/update_hot.py — NE JAMAIS ÉDITER À LA MAIN
      (sauf le bloc "Next Actions", préservé entre régénérations). -->
-# État courant — 2026-07-12
+# État courant — 2026-07-13
 
 ## Stratégie auto-réglée
 - Auto-réglage du 2026-07-12T13:41:48
