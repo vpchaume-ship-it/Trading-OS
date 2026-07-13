@@ -11,6 +11,7 @@ updated: 2026-07-09
 - [[SCHEMA]] — le règlement : templates de pages, workflows, lint.
 - [[log]] — journal chronologique append-only de tout ce qui se passe.
 - [[hot]] — état courant AUTO-GÉNÉRÉ (script `update_hot.py`). Ne jamais éditer à la main.
+- [[dashboard|🧭 Dashboard du cerveau]] — vues Dataview (expériences, concepts, journal).
 - [[lessons]] — synthèse transversale des leçons apprises.
 - [[fiche-route-pc|Fiche de route PC]] — plan d'installation/densification Obsidian ; déclencheur « je suis sur mon PC ».
 - [[Failed Ideas/ledger|Failed Ideas]] — tableau des idées abandonnées + raison. **À lire avant tout travail.**
@@ -37,7 +38,16 @@ updated: 2026-07-09
 - [[concepts/premium-discount|Premium / Discount]] — vendre en premium, acheter en discount (in_pd).
 - [[concepts/eqh-eql|Equal highs/lows]] — piscines de liquidité, cibles naturelles.
 - [[concepts/cible-liquidite|Cible de liquidité]] — sortie sur le pool opposé, RR ≥ 2.
+- [[concepts/mitigation-block|Mitigation block]] — complément d'ordre au retour du prix.
+- [[concepts/liquidity-void|Liquidity void]] — zone traversée sans transactions ; revient se rééquilibrer.
 - [[concepts/rating-bougie|Rating de bougie /10]] — note d'inversion (A+..F) ; remplacé par les filtres de contexte.
+
+## Psychologie (discipline & état mental)
+- [[psychology/plan-de-trading|Plan de trading]] — écrit avant le marché ; 1 setup, 1 trade/jour.
+- [[psychology/gestion-du-risque|Gestion du risque]] — sizing sniper, stop non négociable.
+- [[psychology/drawdown|Drawdown]] — traverser la perte sans sur-trader.
+- [[psychology/biais-emotionnels|Biais émotionnels]] — revenge, FOMO, stop déplacé : les ennemis.
+- [[psychology/journal-trading|Journal de trading]] — la boucle d'apprentissage (bloc Lecture).
 
 ## Journal (auto-généré — corpus « discrétion »)
 - `journal/` — une page par jour tradé (config gelée), annotations « Lecture » en session.
