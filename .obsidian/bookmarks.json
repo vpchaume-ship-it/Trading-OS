@@ -1,0 +1,8 @@
+{
+  "items": [
+    { "type": "file", "path": "wiki/index.md", "title": "🗂 Index" },
+    { "type": "file", "path": "wiki/hot.md", "title": "🔥 État courant" },
+    { "type": "file", "path": "wiki/dashboard.md", "title": "🧭 Dashboard" },
+    { "type": "file", "path": "wiki/Failed Ideas/ledger.md", "title": "🛑 Failed Ideas" }
+  ]
+}

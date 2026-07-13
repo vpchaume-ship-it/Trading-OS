@@ -8,7 +8,6 @@
 
 ## Wiki (4 experiences · 18 concepts · 3 research · 2 reference)
 Entrées récentes du journal :
-- [2026-07-11] experience | Production : walk-forward (30 j train → 10 j test figé, variantes backtestées 1× puis plis en pandas pur), fenêtre 12 mois par date (341k barres, 21 s/run), risklab profil sniper (DP exacte des séries perdantes, sizing borné dur 50-250 $, alerte série > p99) | 106 tests verts · VERDICT OOS : 31 plis, 10 trades, -0.45 R/trade, PF 0.52 — l'edge in-sample était du biais de sélection ; sizing plancher 50 $ tant que l'OOS n'est pas positif
 - [2026-07-11] decision | PRÉ-ENREGISTREMENT (gel de config) : entrée Dodgy clôture inversion + sweep session + V-shape + 1 trade/jour + cible liquidité ≥2R — 24 mois : 25 tr · 40 % WR · +1.38 R · PF 3.21 · DD -4.1 R | SMT bloquante abandonnée (4-11 tr/24 mois) ; sélection quotidienne abandonnée (bruit) ; WF rétrospectif non conclusif → le forward depuis le gel est LA validation ; journal/ auto-généré (25 pages) = corpus discrétion ; 110 tests verts
 - [2026-07-11] decision | Dashboard : les 5 sections backtest (walk-forward, risque, backtest, auto-ajustement, conclusions) fusionnées en UNE carte « config gelée style Dodgy » (demande utilisateur) — forward en vedette, référence 24 mois, equity, risque et auto-apprentissage en lignes intégrées | grille de variantes coupée quand une config est pré-enregistrée : build 6 min 30 → 1 min 22
 - [2026-07-12] decision | Carte de biais ES rétablie après celle de NQ (demande utilisateur), étiquetée « RÉF. SMT — NON TRADÉ » + tuile héro ES | le flux ES était déjà fetché pour la SMT, seul l'affichage manquait ; NQ reste le seul instrument tradé
@@ -16,6 +15,7 @@ Entrées récentes du journal :
 - [2026-07-12] experience | École des presque livrée (nearmiss.py) : le moteur mesure vs_ticks/tgt_rr/nth_of_day sur chaque trade ; run assoupli séparé isole par dimension les « presque » (relâcher 1 critère seul) ; panneau dashboard + persistance | 24 mois NQ : candidat = 2ᵉ setup/jour (9 tr, +0.43 R, PROMOUVABLE) ; RR court -0.16 R ; V mou 0 tr — socle jamais touché, promotion = décision sur forward ; 115 tests verts
 - [2026-07-13] setup | Session PC : densification du graphe Obsidian — 8 concepts ICT ajoutés (order block, displacement, BOS/CHoCH, judas swing, SMT, premium/discount, EQH/EQL, cible liquidité), tissés entre eux et vers le code | 8 → 16 concepts ; indexés (zéro orphelin)
 - [2026-07-13] setup | Session PC suite : cluster psychologie (plan, risque, drawdown, biais, journal — couleur dédiée dans le graphe) + 2 concepts ICT (mitigation block, liquidity void) + page Dataview dashboard.md | wiki 57 → 65 pages, 18 concepts ; NB graph.json édité Obsidian ouvert (voir avertissement)
+- [2026-07-13] setup | Vault Obsidian rendu turnkey : .obsidian/ pré-configuré (core-plugins graph/backlinks/recherche/survol activés = zéro téléchargement, app.json, appearance dark, bookmarks index/hot/dashboard/ledger) | à l'ouverture du dossier comme vault, graphe + liens + couleurs fonctionnent immédiatement ; Dataview reste optionnel (bonus)
 
 ## Next Actions
 <!-- next-actions:start -->

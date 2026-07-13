@@ -1,0 +1,8 @@
+{
+  "alwaysUpdateLinks": true,
+  "readableLineLength": true,
+  "showUnsupportedFiles": false,
+  "newLinkFormat": "shortest",
+  "useMarkdownLinks": false,
+  "attachmentFolderPath": "raw/assets"
+}
