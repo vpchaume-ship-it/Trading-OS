@@ -3,7 +3,7 @@
 # État courant — 2026-07-13
 
 ## Stratégie auto-réglée
-- Auto-réglage du 2026-07-12T13:41:48
+- Auto-réglage du 2026-07-13T13:21:43
 - **NQ** : Sweep session + V-shape (clôture inversion) — config PRÉ-ENREGISTRÉE le 2026-07-11
 
 ## Wiki (4 experiences · 8 concepts · 3 research · 2 reference)
