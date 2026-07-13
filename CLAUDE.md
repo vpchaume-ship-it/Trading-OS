@@ -1,8 +1,27 @@
 # Trading OS
 
-Système de recherche/backtest ICT IFVG (ES/NQ futures, 1 minute), **démo/paper
+Système de recherche/backtest ICT IFVG (NQ futures, 1 minute), **démo/paper
 uniquement** — des garde-fous codés en dur interdisent le trading réel. Langue
 du projet : français. Tests : `python -m pytest tests/ -q` (PYTHONPATH=racine).
+
+## Démarrage d'une session (local Cowork OU cloud web)
+
+Au tout début, s'orienter en 3 lectures : `wiki/index.md` → `wiki/hot.md`
+(état courant auto-généré : config gelée retenue, stratégie du jour) →
+`wiki/Failed Ideas/ledger.md` (ne pas refaire une impasse). Ça suffit à
+reprendre tout le contexte, quelle que soit la machine.
+
+**Règle dure en cours** : la config est GELÉE (pré-enregistrée le 2026-07-11,
+`backtest.registered_variant`). Ne PAS toucher au socle (sweep session + IFVG +
+V-shape + 1 trade/jour + cible liquidité ≥2R) avant ≥ 15 trades forward hors
+échantillon. L'élargissement de cadence passe par l'[[école des presque]] sur
+évidence, jamais par un curseur relâché à la main.
+
+**Deux environnements, un seul dépôt** : les routines dashboard (matin +
+intraday) tournent dans le cloud ; une session Cowork LOCALE travaille sur le
+clone du PC (Obsidian en direct). Les hooks `.claude/settings.json` font
+`git pull` au démarrage et commit/push à l'arrêt — local et cloud restent
+synchronisés via git. En cas de doute, `git pull` avant de commencer.
 
 ## Professional Trader Mindset
 

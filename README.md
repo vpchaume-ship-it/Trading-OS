@@ -1,5 +1,7 @@
 # Trading OS — NQ · modèle ICT IFVG · terminal
 
+> **Nouvelle session (Cowork local ou web) ? Commence par [START_HERE.md](START_HERE.md).**
+
 Système de trading en terminal pour les futures **NQ** (ES conservé uniquement
 comme référence SMT — jamais tradé), basé sur le modèle
 **IFVG (Inversion Fair Value Gap)** de la méthodologie ICT.

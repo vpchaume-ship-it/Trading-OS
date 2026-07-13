@@ -8,7 +8,6 @@
 
 ## Wiki (4 experiences · 18 concepts · 3 research · 2 reference)
 Entrées récentes du journal :
-- [2026-07-11] decision | PRÉ-ENREGISTREMENT (gel de config) : entrée Dodgy clôture inversion + sweep session + V-shape + 1 trade/jour + cible liquidité ≥2R — 24 mois : 25 tr · 40 % WR · +1.38 R · PF 3.21 · DD -4.1 R | SMT bloquante abandonnée (4-11 tr/24 mois) ; sélection quotidienne abandonnée (bruit) ; WF rétrospectif non conclusif → le forward depuis le gel est LA validation ; journal/ auto-généré (25 pages) = corpus discrétion ; 110 tests verts
 - [2026-07-11] decision | Dashboard : les 5 sections backtest (walk-forward, risque, backtest, auto-ajustement, conclusions) fusionnées en UNE carte « config gelée style Dodgy » (demande utilisateur) — forward en vedette, référence 24 mois, equity, risque et auto-apprentissage en lignes intégrées | grille de variantes coupée quand une config est pré-enregistrée : build 6 min 30 → 1 min 22
 - [2026-07-12] decision | Carte de biais ES rétablie après celle de NQ (demande utilisateur), étiquetée « RÉF. SMT — NON TRADÉ » + tuile héro ES | le flux ES était déjà fetché pour la SMT, seul l'affichage manquait ; NQ reste le seul instrument tradé
 - [2026-07-12] experience | Question utilisateur « pourquoi 25 trades/24 mois quand Dodgy en prend 10-20/mois » → entonnoir mesuré : 54 114 inversions IFVG, -74 % sweep session, -9 238 V-shape, -4 677 RR<2, killzone 2 h implicite → 25 ; sweep SWING élargi testé : 26 trades (idem) — le goulot n'est pas le sweep mais V-shape+RR+killzone | la cadence de Dodgy vient des setups que seul son œil qualifie ; mécaniquement, les relâcher dilue l'edge (sans V-shape : 69 tr à +0.18 R, mesuré) — gel maintenu
@@ -16,6 +15,7 @@ Entrées récentes du journal :
 - [2026-07-13] setup | Session PC : densification du graphe Obsidian — 8 concepts ICT ajoutés (order block, displacement, BOS/CHoCH, judas swing, SMT, premium/discount, EQH/EQL, cible liquidité), tissés entre eux et vers le code | 8 → 16 concepts ; indexés (zéro orphelin)
 - [2026-07-13] setup | Session PC suite : cluster psychologie (plan, risque, drawdown, biais, journal — couleur dédiée dans le graphe) + 2 concepts ICT (mitigation block, liquidity void) + page Dataview dashboard.md | wiki 57 → 65 pages, 18 concepts ; NB graph.json édité Obsidian ouvert (voir avertissement)
 - [2026-07-13] setup | Vault Obsidian rendu turnkey : .obsidian/ pré-configuré (core-plugins graph/backlinks/recherche/survol activés = zéro téléchargement, app.json, appearance dark, bookmarks index/hot/dashboard/ledger) | à l'ouverture du dossier comme vault, graphe + liens + couleurs fonctionnent immédiatement ; Dataview reste optionnel (bonus)
+- [2026-07-13] setup | Onboarding session Cowork : START_HERE.md (accueil humain 30 s + table « où est quoi ») + bloc « Démarrage d'une session » dans CLAUDE.md (3 lectures d'orientation, règle du gel, coordination cloud/local via hooks git) ; README pointe vers START_HERE | une session locale reprend tout le contexte sans réexplication
 
 ## Next Actions
 <!-- next-actions:start -->
