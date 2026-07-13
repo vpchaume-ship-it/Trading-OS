@@ -29,6 +29,14 @@ updated: 2026-07-09
 - [[concepts/walk-forward|Walk-forward]] — validation hors échantillon glissante ; LA stat de référence du dashboard.
 - [[concepts/ecole-des-presque|École des presque]] — mesure ce que le socle rejette de peu ; unité de promotion sur évidence, socle jamais touché.
 - [[concepts/boucle-auto-ajustement|Boucle d'auto-ajustement]] — feedback quotidien sur les paramètres secondaires, socle gelé, garde-fous durs.
+- [[concepts/order-block|Order block]] — dernière bougie opposée avant le displacement ; borde souvent l'IFVG.
+- [[concepts/displacement|Displacement]] — mouvement violent qui laisse des FVG ; mesuré par le V-shape.
+- [[concepts/bos-choch|BOS / CHoCH]] — cassure de structure / changement de caractère (lecture).
+- [[concepts/judas-swing|Judas swing]] — faux mouvement d'ouverture qui piège la liquidité = le trap du socle.
+- [[concepts/smt-divergence|SMT divergence]] — divergence ES/NQ ; testée en filtre, abandonnée.
+- [[concepts/premium-discount|Premium / Discount]] — vendre en premium, acheter en discount (in_pd).
+- [[concepts/eqh-eql|Equal highs/lows]] — piscines de liquidité, cibles naturelles.
+- [[concepts/cible-liquidite|Cible de liquidité]] — sortie sur le pool opposé, RR ≥ 2.
 - [[concepts/rating-bougie|Rating de bougie /10]] — note d'inversion (A+..F) ; remplacé par les filtres de contexte.
 
 ## Journal (auto-généré — corpus « discrétion »)
