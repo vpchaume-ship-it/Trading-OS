@@ -276,6 +276,13 @@ _RULES_SRC: list[tuple[str, str]] = [
      r"\(échec au niveau\) → cible : le PDL\.",
      r"Yesterday swept the PDH (\1) without closing above it (level "
      r"rejection) → target: the PDL."),
+    # -- signaux structure / momentum (préfixés « — » dans la liste) --
+    (r"structure haussière", r"bullish structure"),
+    (r"structure baissière", r"bearish structure"),
+    (r"structure mixte", r"mixed structure"),
+    (r"clôture au-dessus du high précédent", r"close above the previous high"),
+    (r"clôture sous le low précédent", r"close below the previous low"),
+    (r"pas de déplacement net", r"no clear displacement"),
     # -- signaux FVG / SMT (zone ou instrument entre parenthèses) --
     (r"prix DANS un FVG haussier", r"price INSIDE a bullish FVG"),
     (r"prix DANS un FVG baissier", r"price INSIDE a bearish FVG"),
