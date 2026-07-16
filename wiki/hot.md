@@ -1,9 +1,9 @@
 <!-- AUTO-GÉNÉRÉ par wiki/update_hot.py — NE JAMAIS ÉDITER À LA MAIN
      (sauf le bloc "Next Actions", préservé entre régénérations). -->
-# État courant — 2026-07-13
+# État courant — 2026-07-16
 
 ## Stratégie auto-réglée
-- Auto-réglage du 2026-07-13T13:21:43
+- Auto-réglage du 2026-07-16T13:21:55
 - **NQ** : Sweep session + V-shape (clôture inversion) — config PRÉ-ENREGISTRÉE le 2026-07-11
 
 ## Wiki (4 experiences · 18 concepts · 3 research · 2 reference)
