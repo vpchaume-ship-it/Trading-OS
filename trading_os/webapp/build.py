@@ -1266,6 +1266,8 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
 }})();
 </script>
 """
+    from trading_os.webapp.i18n import bilingualize
+    page = bilingualize(page)      # ajoute la version anglaise + le toggle FR/EN
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(page, encoding="utf-8")
