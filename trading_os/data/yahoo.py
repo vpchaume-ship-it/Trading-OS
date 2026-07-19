@@ -107,3 +107,31 @@ def fetch_daily(instrument: str, range_: str = "6mo") -> pd.DataFrame:
 
 def fetch_h1(instrument: str, range_: str = "60d") -> pd.DataFrame:
     return fetch(instrument, range_, "1h")
+
+
+def spot(instrument: str) -> tuple[float, pd.Timestamp] | None:
+    """Dernier prix connu (cotation en direct ou clôture de séance) + son
+    horodatage NY, lu dans le bloc ``meta`` de Yahoo (``regularMarketPrice``).
+
+    C'est la valeur que voit le trader à l'écran — bien plus fraîche que la
+    dernière barre H1 *complète* (qui peut avoir jusqu'à 1 h de retard, et ne
+    capte jamais la clôture tant qu'aucun build ne tourne après 16:00). Les
+    niveaux/FVG/biais continuent d'utiliser les barres complètes ; seul le
+    prix affiché s'appuie sur cette cotation. None si le flux est indisponible.
+    """
+    symbol = YAHOO_SYMBOLS.get(instrument, instrument)
+    try:
+        r = requests.get(_URL.format(symbol=symbol),
+                         params={"range": "1d", "interval": "1h"},
+                         headers=_HEADERS, timeout=25)
+        r.raise_for_status()
+        meta = r.json()["chart"]["result"][0]["meta"]
+        price = meta.get("regularMarketPrice")
+        if price is None:
+            return None
+        ts = meta.get("regularMarketTime")
+        when = (pd.Timestamp(ts, unit="s", tz="UTC").tz_convert(NY)
+                if ts else pd.Timestamp.now(tz=NY))
+        return float(price), when
+    except Exception:
+        return None

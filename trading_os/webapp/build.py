@@ -76,7 +76,16 @@ def instrument_data(name: str, cfg: dict,
     completed = _completed_days(daily, now)
     if len(completed) < 3:
         return None
-    last_price = float(h1["close"].iloc[-1]) if len(h1) else float(daily["close"].iloc[-1])
+    # prix affiché = dernière cotation en direct / clôture de séance (meta
+    # Yahoo), pas la dernière barre H1 complète : c'est ce que voit le trader,
+    # et ça capte la clôture même après 16:00. Repli sur la barre si indispo.
+    from trading_os.data.yahoo import spot
+    sp = spot(name)
+    if sp is not None:
+        last_price, price_asof = sp
+    else:
+        last_price = float(h1["close"].iloc[-1]) if len(h1) else float(daily["close"].iloc[-1])
+        price_asof = h1.index[-1] if len(h1) else completed.index[-1]
     bias, reason = daily_bias(completed)
 
     sib_names = [k for k, v in frames.items() if k != name and v is not None]
@@ -112,7 +121,7 @@ def instrument_data(name: str, cfg: dict,
 
     return {"name": name, "price": last_price, "bias": bias, "reason": reason,
             "matrix": matrix, "levels": levels, "fvgs": fvgs[:6],
-            "prev_day": prev.name, "asof": h1.index[-1] if len(h1) else prev.name}
+            "prev_day": prev.name, "asof": price_asof}
 
 
 # ------------------------------------------------------------------ html
