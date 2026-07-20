@@ -1272,6 +1272,21 @@ input:focus-visible, summary:focus-visible {{ outline:2px solid var(--accent); o
       localStorage.setItem("tos-check", JSON.stringify(stored));
     }});
   }});
+
+  // Auto-refresh : la page est un instantané republié ~toutes les 5 min. Sans
+  // ça, un onglet resté ouvert affiche l'ancien prix (« rien n'a été updaté »).
+  // On recharge périodiquement pour récupérer la dernière version publiée —
+  // mais seulement quand l'onglet est visible et qu'aucun détail n'est ouvert,
+  // pour ne pas couper la lecture. Le scroll est restauré par le runtime.
+  var RELOAD_MS = 150000;   // 2 min 30 (sous le TTL de cache)
+  function scheduleReload() {{
+    setTimeout(function () {{
+      var busy = document.querySelector("details[open]");
+      if (document.hidden || busy) {{ scheduleReload(); return; }}
+      try {{ location.reload(); }} catch (e) {{ scheduleReload(); }}
+    }}, RELOAD_MS);
+  }}
+  scheduleReload();
 }})();
 </script>
 """
