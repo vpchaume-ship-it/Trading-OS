@@ -11,6 +11,15 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 OUT="${1:-dashboard_out.html}"
 
+# Verrou : la boucle 5 min et les crons de séance peuvent se chevaucher. Deux
+# builds simultanés écriraient les mêmes CSV/HTML → course. flock fait qu'un
+# refresh déjà en cours bloque le doublon : on sort proprement (le refresh en
+# cours couvre déjà la fraîcheur). Repli sans flock si l'outil manque.
+if command -v flock >/dev/null 2>&1; then
+  exec 9>/tmp/tos-intraday.lock
+  flock -n 9 || { echo "Refresh déjà en cours — doublon ignoré."; exit 0; }
+fi
+
 # Porte DST-proof : n'exécuter que pendant la séance RTH NY (9:25 → 16:20,
 # marge incluse pour capter la clôture 16:00) un jour de semaine. Ainsi le
 # prix reste frais toute la séance et le dernier build du jour affiche le
