@@ -58,6 +58,7 @@ def accumulate(instrument: str, directory: str | Path = "data") -> dict[str, tup
 
 
 def main() -> None:
+    import os
     for instrument in ("NQ",):    # NQ seul tradé ; ES (réf. SMT) vient du flux live
         try:
             result = accumulate(instrument)
@@ -67,7 +68,13 @@ def main() -> None:
             print(f"✗ {instrument} — {exc}")
     # Historique profond Dukascopy : extension incrémentale quotidienne, sinon
     # la fenêtre du backtest reste figée à la dernière barre stockée (le deep
-    # est prioritaire sur Yahoo dans select_backtest_df).
+    # est prioritaire sur Yahoo dans select_backtest_df). C'est l'étape LENTE
+    # (~90 s) : inutile en intraday (le backtest 24 mois est la référence gelée,
+    # pas besoin de fraîcheur 5 min) → TOS_SKIP_DEEP=1 la saute pour un refresh
+    # rapide. L'extension quotidienne du matin garde le deep à jour.
+    if os.environ.get("TOS_SKIP_DEEP") == "1":
+        print("↷ deep Dukascopy sauté (refresh intraday rapide)")
+        return
     try:
         from trading_os.data.deep import refresh_deep
         n = refresh_deep("NQ")

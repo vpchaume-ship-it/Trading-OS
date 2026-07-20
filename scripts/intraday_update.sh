@@ -29,6 +29,10 @@ sys.exit(0 if ok else 1)
 PYGATE
 fi
 
-python -m trading_os.data.accumulate || echo "accumulation KO — on continue avec l'existant"
+# Refresh intraday RAPIDE : on saute l'extension deep Dukascopy (~90 s, utile
+# seulement pour la fenêtre backtest, rafraîchie chaque matin). Prix/niveaux
+# viennent du flux live dans le build ; le backtest 24 mois reste la référence
+# gelée. → build en ~30 s au lieu de ~2 min 30, adapté à la cadence 5 min.
+TOS_SKIP_DEEP=1 python -m trading_os.data.accumulate || echo "accumulation KO — on continue avec l'existant"
 python -m trading_os.webapp.build "$OUT" --light || { echo "BUILD INTRADAY ÉCHOUÉ"; exit 1; }
 echo "Rafraîchissement intraday terminé : $OUT (à republier via l'outil Artifact)."
